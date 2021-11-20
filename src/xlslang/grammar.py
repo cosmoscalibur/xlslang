@@ -5,8 +5,8 @@ from xlslang.suppress_classes import SuppressStrMatch
 
 # Data Types
 
-def xinteger(): return _(r'-?\d+')
-def xdecimal(): return _(r'-?\d+\.\d+')
+def xinteger(): return _(r'\d+')
+def xdecimal(): return _(r'\d+\.\d+')
 
 def xdate(): return _(r'"\d{1,2}/\d{1,2}/\d{4}"')
 def xstring(): return _(r'"[^"]*"')
@@ -50,7 +50,7 @@ def xrange(): return [xsheet_range, xrange_direct] # xrange_union, xrange_inters
 
 # Functions
 
-def x_arg(): return [xrange, x_factor]
+def x_arg(): return [xrange, x_expression]
 def x_args(): return ZeroOrMore(x_arg, sep=x_op_comma) # Union operation
 
 def xfunction_name(): return _(r'[A-Z]([A-Z]|_|[0-9])+')
@@ -63,44 +63,35 @@ def xfunction_call():
     )
 
 # Operations
-def xconcat(): return x_factor, x_op_concat, x_factor
 
-def xperc(): return x_factor, x_op_perc
-def x_unary_add(): return x_op_add, x_factor
-
-def x_power(): return x_factor_arithm, x_op_pow, x_factor_arithm
-def x_comparison(): return x_factor_arithm, x_op_comparison, x_factor_arithm
 
 def x_factor():
     return [
+        xfunction_call,
+        x_pexpression,
         xdecimal,
         xinteger,
-        x_unary_add,
         xdate,
         xstring,
-        xfunction_call,
         xboolean,
         xsheet_cell,
         xcell,
-        x_pexpression,
     ]
 
-def x_factor_arithm():
-    return [
-        xperc,
-        x_factor,
-        xconcat,
-    ]
+def x_unary_add(): return Optional(x_op_add), x_factor, Optional(x_op_perc)
 
-def x_term():
-    return [
-        x_power,
-        x_comparison,
-        (x_factor_arithm, ZeroOrMore(x_op_mult, x_factor_arithm, eolterm=True)),
-    ]
+def x_power(): return x_unary_add, Optional(x_op_pow, x_unary_add)
 
-def x_expression():
-    return x_term, ZeroOrMore(x_op_add, x_term, eolterm=True)
+def x_concat(): return x_power, ZeroOrMore(x_op_concat, x_power)
+
+def x_product(): return x_concat, ZeroOrMore(x_op_mult, x_concat)
+
+def x_sum(): return x_product, ZeroOrMore(x_op_add, x_product)
+
+def x_compare(): return x_sum, Optional(x_op_comparison, x_sum)
+
+def x_expression(): return x_compare
+
 def x_pexpression(): return x_lparen, x_expression, x_rparen
 
 def xformula(): return x_op_assign, x_expression
