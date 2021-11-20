@@ -18,20 +18,21 @@ def xboolean(): return _(r'(TRUE|FALSE)')
 def x_op_add(): return ['+', '-']
 def x_op_mult(): return ['*', '/']
 def x_op_pow(): return SuppressStrMatch('^')
-
 def x_op_perc(): return SuppressStrMatch('%')
+
+def x_op_comparison(): return _(r'<>|[<>]=?|=')
+
 def x_op_concat(): return SuppressStrMatch('&')
 
 def x_op_fix(): return '$'
-
 def x_op_range(): return SuppressStrMatch(':')
 # def x_op_space(): return ' '  # Intersection operator
-def x_op_comma(): return SuppressStrMatch(',') #, Optional(x_op_space) # Union operator
+def x_op_comma(): return SuppressStrMatch(',') # Union operator
 
 def x_lparen(): return SuppressStrMatch('(')
 def x_rparen(): return SuppressStrMatch(')')
 
-def x_op_assign(): return '='
+def x_op_assign(): return SuppressStrMatch('=')
 
 # References
 
@@ -45,17 +46,14 @@ def xrange_direct(): return xcell, x_op_range, xcell
 # def xrange_intersection(): return xcell, OneOrMore(x_op_space, xcell)
 # def xrange_union(): return xcell, OneOrMore(x_op_comma, xcell)
 def xsheet_range(): return xsheet, xrange_direct
-
 def xrange(): return [xsheet_range, xrange_direct] # xrange_union, xrange_intersection, 
 
 # Functions
 
 def x_arg(): return [xrange, x_factor]
-
 def x_args(): return ZeroOrMore(x_arg, sep=x_op_comma) # Union operation
 
 def xfunction_name(): return _(r'[A-Z]([A-Z]|_|[0-9])+')
-
 def xfunction_call():
     return (
         xfunction_name,
@@ -68,10 +66,10 @@ def xfunction_call():
 def xconcat(): return x_factor, x_op_concat, x_factor
 
 def xperc(): return x_factor, x_op_perc
-
 def x_unary_add(): return x_op_add, x_factor
 
-def x_power(): return x_factor, x_op_pow, x_factor
+def x_power(): return x_factor_arithm, x_op_pow, x_factor_arithm
+def x_comparison(): return x_factor_arithm, x_op_comparison, x_factor_arithm
 
 def x_factor():
     return [
@@ -97,12 +95,12 @@ def x_factor_arithm():
 def x_term():
     return [
         x_power,
+        x_comparison,
         (x_factor_arithm, ZeroOrMore(x_op_mult, x_factor_arithm, eolterm=True)),
     ]
 
 def x_expression():
     return x_term, ZeroOrMore(x_op_add, x_term, eolterm=True)
-
 def x_pexpression(): return x_lparen, x_expression, x_rparen
 
 def xformula(): return x_op_assign, x_expression
