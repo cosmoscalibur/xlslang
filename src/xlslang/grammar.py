@@ -85,7 +85,7 @@ def x_product(): return x_concat, ZeroOrMore(x_op_mult, x_concat)
 
 def x_sum(): return x_product, ZeroOrMore(x_op_add, x_product)
 
-def x_expression(): return x_sum, Optional(x_op_comparison, x_sum)
+def x_expression(): return x_sum, ZeroOrMore(x_op_comparison, x_sum)
 
 def x_pexpression(): return x_lparen, x_expression, x_rparen
 
