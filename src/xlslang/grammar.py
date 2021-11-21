@@ -78,9 +78,9 @@ def x_factor():
         xcell,
     ]
 
-def x_unary_add(): return Optional(x_op_add), x_factor, Optional(x_op_perc)
+def x_unary_ops(): return Optional(x_op_add), x_factor, Optional(x_op_perc)
 
-def x_power(): return ZeroOrMore(x_unary_add, x_op_pow), x_unary_add
+def x_power(): return ZeroOrMore(x_unary_ops, x_op_pow), x_unary_ops
 
 def x_concat(): return x_power, ZeroOrMore(x_op_concat, x_power)
 
