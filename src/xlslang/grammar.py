@@ -8,7 +8,7 @@ from xlslang.suppress_classes import SuppressStrMatch
 def xinteger(): return _(r'\d+')
 def xdecimal(): return _(r'\d+\.\d+')
 
-def xdate(): return _(r'"\d{1,2}/\d{1,2}/\d{4}"')
+def xdate(): return _(r'"\d{4}-\d{1,2}-\d{1,2}"')
 def xstring(): return _(r'"[^"]*"')
 
 def xboolean(): return _(r'(TRUE|FALSE)')
