@@ -1,6 +1,5 @@
 from datetime import date
 from decimal import Decimal
-import logging
 
 from arpeggio import PTNodeVisitor
 
@@ -23,7 +22,7 @@ class ExcelLikeVisitor(PTNodeVisitor):
 
     def visit_x_unary_ops(self, node, children):
         cum = children.x_factor[0]
-        cum = cum / 100 if children.x_op_perc else cum
+        cum = cum * Decimal('0.01') if children.x_op_perc else cum
         if children.x_op_add and children.x_op_add[0] == '-':
             cum = -cum
         return cum
@@ -42,7 +41,7 @@ class ExcelLikeVisitor(PTNodeVisitor):
             if children[el * 2 + 1][0] == '*':
                 cum *= children[(el + 1) * 2]
             else:
-                cum /= children[(el + 1) * 2]
+                cum /= children[(el + 1) * 2] * Decimal('1')
         return cum
 
     def visit_x_sum(self, node, children):
