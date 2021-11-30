@@ -66,6 +66,10 @@ class TestArithmetic:
             ('=49-5', 44),
             ('=0.3+17.7', 18),
             ('=9.2-10', Decimal('-0.8')),
+            ('=2+1-8', -5),
+            ('=49-5+15+5.5', Decimal('64.5')),
+            ('=2.0+2-4+8-10-10+20.5', Decimal('8.5')),
+            ('=0.1+0.1+0.1+0.1+0.1+0.1+0.1', Decimal('0.7')),
         ]
     )
     def test_x_sum(self, parser, formula, result):
@@ -75,25 +79,26 @@ class TestArithmetic:
     @pytest.mark.parametrize(
         'formula,result',
         [
-            ('=2+1-8', -5),
-            ('=49-5+15+5.5', Decimal('64.5')),
-            ('=2.0+2-4+8-10-10+20.5', Decimal('8.5')),
-            ('=0.1+0.1+0.1+0.1+0.1+0.1+0.1', Decimal('0.7')),
+            ('=2*3', 6),
+            ('=8*-1.5', -12),
+            ('=-0.2*-0.5', Decimal('0.1')),
+            ('=9/10', Decimal('0.9')),
+            ('=4*3/2*4', 24),
+            ('=2/4*-1.5/3', Decimal('-0.25')),
+            ('=9/-3*2.5', Decimal('-7.5'))
         ]
     )
-    def test_x_sum_multiples(self, parser, formula, result):
+    def test_x_product(self, parser, formula, result):
         parser.parse_from_string(formula)
         assert parser.run() == result
 
     @pytest.mark.parametrize(
         'formula,result',
         [
-            ('=2*3', 6),
-            ('=8*-1.5', -12),
-            ('=-0.2*-0.5', Decimal('0.1')),
-            ('=9/10', Decimal('0.9'))
+            ('="hola"&" "&"mundo"', 'hola mundo'),
+            ('="Xls"&"Lang"', 'XlsLang'),
         ]
     )
-    def test_x_product(self, parser, formula, result):
+    def test_x_concat(self, parser, formula, result):
         parser.parse_from_string(formula)
         assert parser.run() == result
