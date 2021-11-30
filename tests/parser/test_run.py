@@ -46,7 +46,7 @@ class TestDataType:
         parser.parse_from_string(formula)
         assert parser.run() == result
 
-class TestArithmetic:
+class TestOperators:
     @pytest.mark.parametrize(
         'formula,result',
         [
