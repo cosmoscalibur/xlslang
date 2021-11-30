@@ -27,6 +27,13 @@ class ExcelLikeVisitor(PTNodeVisitor):
             cum = -cum
         return cum
 
+    def visit_x_power(self, node, children):
+        cum = children.x_unary_ops[-1]
+        if len(children.x_unary_ops) > 1:
+            for pow in reversed(children.x_unary_ops[:-1]):
+                cum = pow ** cum
+        return cum
+
     def visit_x_concat(self, node, children):
         if len(children) > 1:
             concat = "".join(children)

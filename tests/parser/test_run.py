@@ -62,6 +62,18 @@ class TestOperators:
     @pytest.mark.parametrize(
         'formula,result',
         [
+            ('=2^3', 8),
+            ('=4^2^3', 65536),
+            ('=9^0.5', 3),
+        ]
+    )
+    def test_x_power(self, parser, formula, result):
+        parser.parse_from_string(formula)
+        assert parser.run() == result
+
+    @pytest.mark.parametrize(
+        'formula,result',
+        [
             ('=2+1', 3),
             ('=49-5', 44),
             ('=0.3+17.7', 18),
@@ -135,6 +147,8 @@ class TestOperators:
             ('=-1-9/3', -4),
             ('=2+4*-2', -6),
             ('=(4+2)*5', 30),
+            ('=2^3+1', 9),
+            ('=2*-4^2', 32),
         ]
     )
     def test_hierarchy_precedence(self, parser, formula, result):
