@@ -102,3 +102,27 @@ class TestArithmetic:
     def test_x_concat(self, parser, formula, result):
         parser.parse_from_string(formula)
         assert parser.run() == result
+
+    @pytest.mark.parametrize(
+        'formula,result',
+        [
+            ('=4<3', False),
+            ('=-4<3', True),
+            ('=8>-12', True),
+            ('=8>12', False),
+            ('=0=0', True),
+            ('=0=-2.5', False),
+            ('=3<=3', True),
+            ('=4<=3', False),
+            ('=8>=8', True),
+            ('=8>=12', False),
+            ('=-2.5<>-2.5', False),
+            ('=-2.5<>0', True),
+            ('=8>2=5', False),
+            ('=-2<=0=0', True),
+        ]
+    )
+    def test_x_expression(self, parser, formula, result):
+        "Expression is non terminal node associated with compare operators"
+        parser.parse_from_string(formula)
+        assert parser.run() == result
