@@ -149,6 +149,7 @@ class TestOperators:
             ('=(4+2)*5', 30),
             ('=2^3+1', 9),
             ('=2*-4^2', 32),
+            ('=5--9', 14),
         ]
     )
     def test_hierarchy_precedence(self, parser, formula, result):
