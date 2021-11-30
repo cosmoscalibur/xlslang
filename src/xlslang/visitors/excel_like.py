@@ -82,5 +82,8 @@ class ExcelLikeVisitor(PTNodeVisitor):
                     break
         return cum
 
+    def visit_x_pexpression(self, node, children):
+        return children[0]
+
     def visit_x_code(self, node, children):
         return children[0]
