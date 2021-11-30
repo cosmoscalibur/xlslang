@@ -66,7 +66,7 @@ class ExcelLikeVisitor(PTNodeVisitor):
                 op = children[op_ix]
                 lnode = children[op_ix - 1]
                 rnode = children[op_ix + 1]
-                if op == '==':
+                if op == '=':
                     cum &= lnode == rnode
                 elif op == '<':
                     cum &= lnode < rnode
@@ -74,8 +74,10 @@ class ExcelLikeVisitor(PTNodeVisitor):
                     cum &= lnode <= rnode
                 elif op == '>':
                     cum &= lnode > rnode
-                else:
+                elif op == '>=':
                     cum &= lnode >= rnode
+                else:  # op <>
+                    cum &= lnode != rnode
                 if not cum:
                     break
         return cum
