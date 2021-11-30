@@ -126,3 +126,17 @@ class TestOperators:
         "Expression is non terminal node associated with compare operators"
         parser.parse_from_string(formula)
         assert parser.run() == result
+
+    @pytest.mark.parametrize(
+        'formula,result',
+        [
+            ('=4+2*5', 14),
+            ('=3/2+1', Decimal('2.5')),
+            ('=-1-9/3', -4),
+            ('=2+4*-2', -6),
+            ('=(4+2)*5', 30),
+        ]
+    )
+    def test_hierarchy_precedence(self, parser, formula, result):
+        parser.parse_from_string(formula)
+        assert parser.run() == result
