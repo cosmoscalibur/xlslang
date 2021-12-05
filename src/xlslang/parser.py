@@ -1,7 +1,7 @@
 from arpeggio import ParserPython, visit_parse_tree
 
 from xlslang.grammar import x_code
-from xlslang.visitors import ExcelLikeVisitor
+from xlslang.engines import XlsNoReducedVisitor
 
 
 class XlsLangParser():
@@ -32,7 +32,7 @@ class XlsLangParser():
 
     def run(self, debug=False):
         return visit_parse_tree(
-            self.parse_tree, ExcelLikeVisitor(debug=debug)
+            self.parse_tree, XlsNoReducedVisitor(debug=debug)
         )
 
     def build_py(self):
@@ -48,5 +48,5 @@ class XlsLangParser():
 if __name__ == "__main__":
     ## Testing purpose only (bad practice, pending pytest)
     parser = XlsLangParser(reduce_tree=False, debug=True)
-    parser.parse_from_string('=2+1')
+    parser.parse_from_string('=TODAY()')
     print('Resultado: ', str(parser.run(True)))

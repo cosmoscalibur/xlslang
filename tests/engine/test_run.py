@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+from xlslang.engines.datatypes import XString
 
 from xlslang.parser import XlsLangParser
 
@@ -44,7 +45,9 @@ class TestDataType:
     )
     def test_xstring(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value = parser.run()
+        assert isinstance(value, XString)
+        assert value.value == result
 
 class TestOperators:
     @pytest.mark.parametrize(
@@ -113,7 +116,9 @@ class TestOperators:
     )
     def test_x_concat(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value = parser.run()
+        assert isinstance(value, XString)
+        assert value.value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -153,5 +158,44 @@ class TestOperators:
         ]
     )
     def test_hierarchy_precedence(self, parser, formula, result):
+        parser.parse_from_string(formula)
+        assert parser.run() == result
+
+    @pytest.mark.parametrize(
+        'formula,result',
+        [
+            ('="2"+3', 5),
+            ('=2+"3"-1.5', Decimal('3.5')),
+            ('="4"&"3"+1', 44),
+            ('=2*"3"&"1"', 62)
+        ]
+    )
+    def test_implicit_conversion_string_number(self, parser, formula, result):
+        parser.parse_from_string(formula)
+        assert parser.run() == result
+
+
+class TestFunction:
+    @pytest.mark.parametrize(
+        'formula,result',
+        [
+            ('=TODAY()', 2)
+        ]
+    )
+    def test_function_no_args(self, parser, formula, result):
+        parser.parse_from_string(formula)
+        assert parser.run() == result
+
+
+class TestCode:
+    @pytest.mark.parametrize(
+        'formula,result',
+        [
+            ('A2=5.1', {'A2': Decimal('5.1')}),
+            ('B12="4"&"1"+3', {'B12': 44}),
+            ('AZ1=2=2', {'AZ1': True}),
+        ]
+    )
+    def test_one_line_assignment(self, parser, formula, result):
         parser.parse_from_string(formula)
         assert parser.run() == result
