@@ -3,7 +3,9 @@ from decimal import Decimal
 
 from arpeggio import PTNodeVisitor
 
-class ExcelLikeVisitor(PTNodeVisitor):
+from xlslang.engines.datatypes import XString
+
+class XlsNoReducedVisitor(PTNodeVisitor):
 
     def visit_xinteger(self, node, children):
         return int(node.value)
@@ -15,7 +17,7 @@ class ExcelLikeVisitor(PTNodeVisitor):
         return date.fromisoformat(node.value[1:-1])
 
     def visit_xstring(self, node, children):
-        return node.value[1:-1]
+        return XString(node.value[1:-1])
 
     def visit_xboolean(self, node, children):
         return True if node.value == 'TRUE' else False
@@ -36,7 +38,7 @@ class ExcelLikeVisitor(PTNodeVisitor):
 
     def visit_x_concat(self, node, children):
         if len(children) > 1:
-            concat = "".join(children)
+            concat = XString("").join(children)
         else:
             concat = children[0]
         return concat
@@ -94,3 +96,13 @@ class ExcelLikeVisitor(PTNodeVisitor):
 
     def visit_x_code(self, node, children):
         return children[0]
+
+    def visit_xfunction_call(self, node, children):
+        '''
+        Crear firma de funciones.
+        Módulo tipo constante con asociación de diccionario cuya clave es el
+        nombre de la función y el valor tiene registro del import de la función,
+        firma de argumentos (as-is, expand, custom), tipo de función (builtin, custom).
+        La idea de una función builtin es no requerir resolución adicional
+        '''
+        pass
