@@ -6,6 +6,9 @@ from arpeggio import PTNodeVisitor
 from xlslang.engines.datatypes import XString
 
 class XlsNoReducedVisitor(PTNodeVisitor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.variables = dict()
 
     def visit_xinteger(self, node, children):
         return int(node.value)
@@ -21,6 +24,9 @@ class XlsNoReducedVisitor(PTNodeVisitor):
 
     def visit_xboolean(self, node, children):
         return True if node.value == 'TRUE' else False
+
+    def visit_xcell(self, node, children):
+        return self.variables[node.value]
 
     def visit_x_unary_ops(self, node, children):
         cum = children.x_factor[0]
@@ -94,8 +100,20 @@ class XlsNoReducedVisitor(PTNodeVisitor):
     def visit_x_pexpression(self, node, children):
         return children[0]
 
+    def visit_xformula(self, node, children):
+        result = children.x_expression[0]
+        if not children.xcell_assigment:
+            return result
+        else:
+            varname = children.xcell_assigment[0]
+            self.variables[varname] = result
+
     def visit_x_code(self, node, children):
-        return children[0]
+        output = children.xformula
+        if len(output) == 1:
+            return output[0]
+        else:
+            return output
 
     def visit_xfunction_call(self, node, children):
         '''
