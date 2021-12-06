@@ -25,7 +25,7 @@ def x_op_comparison(): return _(r'<>|[<>]=?|=')
 def x_op_concat(): return SuppressStrMatch('&')
 
 def x_op_fix(): return SuppressStrMatch('$')
-def x_op_range(): return SuppressStrMatch(':')
+def x_op_range(): return ':'
 def x_op_comma(): return SuppressStrMatch(',') # Union operator
 
 def x_lparen(): return SuppressStrMatch('(')
@@ -35,14 +35,12 @@ def x_op_assign(): return SuppressStrMatch('=')
 
 # References
 
-def xcol_name(): return _(r'[A-Z]+')
-def xsheet(): return _(r"(\w+|'[^']+')"), SuppressStrMatch('!')
+def xcell(): return Combine(Optional(x_op_fix), _(r'[A-Z]+'), Optional(x_op_fix), _(r'[0-9]+'))
+def xsheet(): return _(r"(\w+|'[^']+')!")
+def xsheet_cell(): return Combine(xsheet, xcell)
 
-def xcell(): return Optional(x_op_fix), xcol_name, Optional(x_op_fix), xinteger
-def xsheet_cell(): return xsheet, xcell
-
-def xrange_direct(): return xcell, x_op_range, xcell
-def xsheet_range(): return xsheet, xrange_direct
+def xrange_direct(): return Combine(xcell, x_op_range, xcell)
+def xsheet_range(): return Combine(xsheet, xrange_direct)
 def xrange(): return [xsheet_range, xrange_direct]
 
 # Functions
@@ -89,7 +87,10 @@ def x_expression(): return x_sum, ZeroOrMore(x_op_comparison, x_sum)
 
 def x_pexpression(): return x_lparen, x_expression, x_rparen
 
-def xformula(): return x_op_assign, x_expression
-def x_assigment(): return xcell, Optional(SuppressStrMatch('<-'), xfunction_name)
-def x_line(): return Optional(x_assigment), xformula
-def x_code(): return OneOrMore(x_line, sep=SuppressStrMatch('\n')), EOF
+def xcell_assigment(): return _(r'[A-Z]+[0-9]+')
+def x_op_type_assigment(): return SuppressStrMatch('<-')
+def x_type(): return _(r'[A-Za-z][A-Za-z0-9_]+')
+
+def xformula(): return Optional(xcell_assigment, Optional(x_op_type_assigment, x_type)), x_op_assign, x_expression
+
+def x_code(): return OneOrMore(xformula, sep=SuppressStrMatch('\n')), EOF
