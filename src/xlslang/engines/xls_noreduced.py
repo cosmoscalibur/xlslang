@@ -102,10 +102,10 @@ class XlsNoReducedVisitor(PTNodeVisitor):
 
     def visit_xformula(self, node, children):
         result = children.x_expression[0]
-        if not children.xcell_assigment:
+        if not children.xcell_assignment:
             return result
         else:
-            varname = children.xcell_assigment[0]
+            varname = children.xcell_assignment[0]
             self.variables[varname] = result
 
     def visit_x_code(self, node, children):

@@ -87,10 +87,10 @@ def x_expression(): return x_sum, ZeroOrMore(x_op_comparison, x_sum)
 
 def x_pexpression(): return x_lparen, x_expression, x_rparen
 
-def xcell_assigment(): return _(r'[A-Z]+[0-9]+')
-def x_op_type_assigment(): return SuppressStrMatch('<-')
+def xcell_assignment(): return _(r'[A-Z]+[0-9]+')
+def x_op_type_assignment(): return SuppressStrMatch('<-')
 def x_type(): return _(r'[A-Za-z][A-Za-z0-9_]+')
 
-def xformula(): return Optional(xcell_assigment, Optional(x_op_type_assigment, x_type)), x_op_assign, x_expression
+def xformula(): return Optional(xcell_assignment, Optional(x_op_type_assignment, x_type)), x_op_assign, x_expression
 
 def x_code(): return OneOrMore(xformula, sep=SuppressStrMatch('\n')), EOF
