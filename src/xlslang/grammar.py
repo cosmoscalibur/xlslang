@@ -1,4 +1,4 @@
-from arpeggio import Combine, EOF, OneOrMore, Optional, ZeroOrMore
+from arpeggio import And, Combine, EOF, OneOrMore, Optional, ZeroOrMore
 from arpeggio import RegExMatch as _
 
 from xlslang.suppress_classes import SuppressStrMatch
@@ -26,7 +26,7 @@ def x_op_concat(): return SuppressStrMatch('&')
 
 def x_op_fix(): return SuppressStrMatch('$')
 def x_op_range(): return ':'
-def x_op_comma(): return SuppressStrMatch(',') # Union operator
+def x_op_comma(): return ',' # Union operator
 
 def x_lparen(): return SuppressStrMatch('(')
 def x_rparen(): return SuppressStrMatch(')')
@@ -46,7 +46,7 @@ def xrange(): return [xsheet_range, xrange_direct]
 # Functions
 
 def x_arg(): return [xrange, x_expression]
-def x_args(): return ZeroOrMore(x_arg, sep=x_op_comma)
+def x_args(): return ZeroOrMore(Optional(x_arg), x_op_comma), Optional(x_arg)
 
 def xfunction_name(): return _(r'[A-Z]([A-Z]|_|[0-9])+')
 def xfunction_call():
