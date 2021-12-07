@@ -19,6 +19,12 @@ class XString:
         joined = self.value.join([text.value for text in text_list])
         return XString(joined)
 
+    def __eq__(self, other) -> bool:
+        if isinstance(other, XString):
+            return self.value == other.value
+        else:
+            return False
+
     def __neg__(self) -> Decimal:
         return -self.number
 
