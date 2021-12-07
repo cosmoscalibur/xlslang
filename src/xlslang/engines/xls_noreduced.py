@@ -111,9 +111,9 @@ class XlsNoReducedVisitor(PTNodeVisitor):
     def visit_x_code(self, node, children):
         output = children.xformula
         if len(output) == 1:
-            return output[0]
+            return output[0], self.variables
         else:
-            return output
+            return output, self.variables
 
     def visit_xfunction_call(self, node, children):
         '''
