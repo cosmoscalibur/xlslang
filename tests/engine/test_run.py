@@ -20,7 +20,8 @@ class TestDataType:
     )
     def test_xinteger(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -31,7 +32,8 @@ class TestDataType:
     )
     def test_xdecimal(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -45,7 +47,7 @@ class TestDataType:
     )
     def test_xstring(self, parser, formula, result):
         parser.parse_from_string(formula)
-        value = parser.run()
+        value, _ = parser.run()
         assert isinstance(value, XString)
         assert value.value == result
 
@@ -60,7 +62,8 @@ class TestOperators:
     )
     def test_x_unary_ops(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -72,7 +75,8 @@ class TestOperators:
     )
     def test_x_power(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -89,7 +93,8 @@ class TestOperators:
     )
     def test_x_sum(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -105,7 +110,8 @@ class TestOperators:
     )
     def test_x_product(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -116,7 +122,7 @@ class TestOperators:
     )
     def test_x_concat(self, parser, formula, result):
         parser.parse_from_string(formula)
-        value = parser.run()
+        value, _ = parser.run()
         assert isinstance(value, XString)
         assert value.value == result
 
@@ -142,7 +148,8 @@ class TestOperators:
     def test_x_expression(self, parser, formula, result):
         "Expression is non terminal node associated with compare operators"
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -159,7 +166,8 @@ class TestOperators:
     )
     def test_hierarchy_precedence(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
     @pytest.mark.parametrize(
         'formula,result',
@@ -172,7 +180,8 @@ class TestOperators:
     )
     def test_implicit_conversion_string_number(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
 
 class TestFunction:
@@ -184,7 +193,8 @@ class TestFunction:
     )
     def test_function_no_args(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, _ = parser.run()
+        assert value == result
 
 
 class TestCode:
@@ -198,4 +208,19 @@ class TestCode:
     )
     def test_one_line_assignment(self, parser, formula, result):
         parser.parse_from_string(formula)
-        assert parser.run() == result
+        value, dict_variables = parser.run()
+        assert value == []
+        assert dict_variables == result
+
+    @pytest.mark.parametrize(
+        'formula,result',
+        [
+            ('A2=5.1\nD12="1"&"4"', {'A2': Decimal('5.1'), 'D12': XString('14')}),
+            ('B12="4"&"1"+3\n=12+1', {'B12': 44}),
+            ('AZ1=2+2\nBB15=AZ1^2', {'AZ1': 4, 'BB15': 16}),
+        ]
+    )
+    def test_multiline_assignment(self, parser, formula, result):
+        parser.parse_from_string(formula)
+        _, dict_variables = parser.run()
+        assert dict_variables == result
