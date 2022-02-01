@@ -4,6 +4,7 @@ from decimal import Decimal
 from arpeggio import PTNodeVisitor
 
 from xlslang.engines.datatypes import XString
+from xlslang.engines import functions as xlsfunctions
 
 class XlsNoReducedVisitor(PTNodeVisitor):
     def __init__(self, *args, **kwargs):
@@ -116,11 +117,11 @@ class XlsNoReducedVisitor(PTNodeVisitor):
             return output, self.variables
 
     def visit_xfunction_call(self, node, children):
-        '''
-        Crear firma de funciones.
-        Módulo tipo constante con asociación de diccionario cuya clave es el
-        nombre de la función y el valor tiene registro del import de la función,
-        firma de argumentos (as-is, expand, custom), tipo de función (builtin, custom).
-        La idea de una función builtin es no requerir resolución adicional
-        '''
-        pass
+        xls_function = getattr(
+            xlsfunctions,
+            children.xfunction_name[0].lower()
+        )
+        if children.x_args:
+            return xls_function(*children.x_args)
+        else:
+            return xls_function()

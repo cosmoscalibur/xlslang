@@ -1,8 +1,9 @@
+from datetime import date
 from decimal import Decimal
 
 import pytest
-from xlslang.engines.datatypes import XString
 
+from xlslang.engines.datatypes import XString
 from xlslang.parser import XlsLangParser
 
 @pytest.fixture
@@ -188,7 +189,7 @@ class TestFunction:
     @pytest.mark.parametrize(
         'formula,result',
         [
-            ('=TODAY()', 2)
+            ('=TODAY()', date.today())
         ]
     )
     def test_function_no_args(self, parser, formula, result):
