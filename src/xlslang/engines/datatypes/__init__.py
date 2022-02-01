@@ -9,6 +9,9 @@ class XString:
     def __str__(self):
         return self.value
 
+    def __repr__(self):
+        return self.value
+
     @property
     def number(self):
         if self._number is None:
