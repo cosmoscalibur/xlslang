@@ -1,3 +1,5 @@
+import sys
+
 from arpeggio import ParserPython, visit_parse_tree
 
 from xlslang.grammar import x_code
@@ -46,7 +48,6 @@ class XlsLangParser():
 
 
 if __name__ == "__main__":
-    ## Testing purpose only (bad practice, pending pytest)
-    parser = XlsLangParser(reduce_tree=False, debug=True)
-    parser.parse_from_string('=TODAY()')
-    print('Resultado: ', str(parser.run(True)))
+    parser = XlsLangParser(reduce_tree=False, debug=False)
+    parser.parse_from_string(sys.argv[1])
+    print('Resultado: ', str(parser.run(False)))
