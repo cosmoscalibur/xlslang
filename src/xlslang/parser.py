@@ -3,7 +3,7 @@ import sys
 from arpeggio import ParserPython, visit_parse_tree
 
 from xlslang.grammar import x_code
-from xlslang.engines import XlsNoReducedVisitor
+from xlslang.engines import XlsNoReducedVisitor, XlsReducedVisitor
 
 
 class XlsLangParser():
@@ -14,6 +14,7 @@ class XlsLangParser():
         reduce_tree=False,
         memoization=False,
     ):
+        self.reduce_tree = reduce_tree
         self.parser = ParserPython(
             x_code,
             ws=' \t\r',
@@ -33,9 +34,10 @@ class XlsLangParser():
         pass
 
     def run(self, debug=False):
-        return visit_parse_tree(
-            self.parse_tree, XlsNoReducedVisitor(debug=debug)
+        visitor = (
+            XlsReducedVisitor if self.reduce_tree else XlsNoReducedVisitor
         )
+        return visit_parse_tree(self.parse_tree, visitor(debug=debug))
 
     def build_py(self):
         pass

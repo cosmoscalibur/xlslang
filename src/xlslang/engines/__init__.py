@@ -1,1 +1,2 @@
 from xlslang.engines.xls_noreduced import XlsNoReducedVisitor
+from xlslang.engines.xls_reduced import XlsReducedVisitor
