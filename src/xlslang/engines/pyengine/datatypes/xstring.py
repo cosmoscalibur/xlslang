@@ -1,23 +1,22 @@
 from decimal import Decimal
-from datetime import date, timedelta
 
 class XString:
 
-    def __init__(self, text:str):
+    def __init__(self, text:str, implicit=False):
         self.data = text
         self._number = None
+        self.implicit = implicit
 
     def __str__(self):
         return self.data
 
     def __repr__(self):
-        return f'{self.__class__.__name__}({self.data})'
+        delim = "\"" if self.implicit else "'"
+        return f'{self.__class__.__name__}({delim}{self.data}{delim})'
 
     @property
     def number(self):
-        if self._number is None:
-            self._number = Decimal(self.data)
-        return self._number
+        return Decimal(self.data) if self.implicit else None
 
     def join(self, text_list):
         joined = self.data.join([text.data for text in text_list])
@@ -74,12 +73,3 @@ class XString:
 
     def __rmod__(self, other) -> Decimal:
         return self.__mod__(other)
-
-class XDate(date):
-
-    def __add__(self, other):
-        if isinstance(other, int):
-            return XDate(self + timedelta(days=other))
-
-
-

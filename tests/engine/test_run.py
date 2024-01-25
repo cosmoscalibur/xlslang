@@ -50,7 +50,7 @@ class TestDataType:
         parser.parse_from_string(formula)
         value, _ = parser.run()
         assert isinstance(value, XString)
-        assert value.value == result
+        assert value.data == result
 
 class TestOperators:
     @pytest.mark.parametrize(
@@ -125,7 +125,7 @@ class TestOperators:
         parser.parse_from_string(formula)
         value, _ = parser.run()
         assert isinstance(value, XString)
-        assert value.value == result
+        assert value.data == result
 
     @pytest.mark.parametrize(
         'formula,result',
