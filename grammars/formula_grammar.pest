@@ -1,0 +1,170 @@
+/*
+Excel Syntax https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/c45b0396-bc38-4fd6-abf7-9782b7d6f926
+{} - zero or more
+[] - optional
+() - grouping
+– - negation
+*/
+formula = { "=" ~ expression }
+space = { " " }
+
+lparen = { "(" }
+rparen = { ")" }
+
+expression = {  space* ~ nospace_expression ~ space* }
+nospace_expression = {
+  prefix_operator? ~ primary ~ postfix_operator? ~ (infix_operator ~ prefix_operator? ~ primary ~ postfix_operator? )*
+}
+primary = {
+  space* ~
+  (lparen ~ expression ~ rparen | constant | cell_reference ~ (space ~ cell_reference)? | function_call | name_reference) ~
+  space*
+}
+
+/*
+Excel Constants https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/e7502ecf-232e-44a0-84eb-1d391ff386b5
+*/
+constant = { space* ~ (error_constant | logical_constant | numerical_constant | string_constant | array_constant) ~ space* }
+
+// === Boolean values ===
+logical_constant = { "FALSE" | "TRUE" }
+// === Error values ===
+error_constant = {
+  "#DIV/0!" | "#N/A" | "#NAME?" |
+  "#NULL!" | "#NUM!" | "#REF!" |
+  "#VALUE!" | "#GETTING_DATA"
+}
+// === String values ===
+character = { ANY }
+double_quote = { "\"" }
+escaped_double_quote = { "\"\"" }
+string_char = { escaped_double_quote | !double_quote ~ character }
+string_chars = @{ string_char+ }
+string_constant = { double_quote ~ string_chars ~ double_quote }
+// === Numeric values ===
+nonzero_decimal_digit = { ASCII_NONZERO_DIGIT }
+decimal_digit = { ASCII_DIGIT }
+nonzero_digit_sequence = @{ nonzero_decimal_digit ~ decimal_digit* }
+digit_sequence = @{ decimal_digit+ }
+exponent_character = { "e" | "E" }
+neg_sign = { "-" }
+sign = { neg_sign | "+" }
+full_stop = { "." }
+exponent_part = { exponent_character ~ sign? ~ digit_sequence }
+fractional_part = @{ full_stop ~ digit_sequence }
+whole_number_part = @{ digit_sequence }
+significand_part = { whole_number_part ~ fractional_part? | fractional_part }
+numerical_constant = { sign? ~ significand_part ~ exponent_part? }
+// === Array values ===
+semicolon = { ";" }
+comma = { "," }
+array_constant = { "{" ~ constant_list_rows ~ "}" }
+constant_list_rows = { constant_list_row ~ ( semicolon ~ constant_list_row )* }
+constant_list_row = { constant ~ ( comma ~ constant )* }
+
+/*
+Excel operators https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/caae6c6e-fc42-4f27-ad8f-91002f4e56ac
+Calculation operators and precedence in Excel https://support.microsoft.com/en-gb/office/calculation-operators-and-precedence-in-excel-48be406d-4975-4d31-b2b8-7af9e0e2878a
+*/
+prefix_operator = { pos | neg }
+  neg = { "-" }
+  pos = { "+" }
+postfix_operator = { perc }
+  perc = { "%" }
+// Reference operator colon and space are cell reference specifications, but excel define in infix before space
+infix_operator = { pow | mul | div | add | sub | cat | eq | ne | lt | le | gt | ge }
+  pow = { "^" }
+  mul = { "*" }
+  div = { "/" }
+  add = { "+" }
+  sub = { "-" }
+  cat = { "&" }
+  eq = { "=" }
+  ne = { "<>" }
+  lt = { "<" }
+  le = { "<=" }
+  gt = { ">" }
+  ge = { ">=" }
+// reference operator are infix operator
+// colon and comma are cell reference specifications conflicted with infix operator
+ref_operator = { colon | comma | space }
+  colon = { ":" }
+operator = { ref_operator | infix_operator | postfix_operator }
+
+/*
+Excel Cell Reference https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/3c420ebb-6ef1-4b0d-959d-76e88c841c3e
+Sorry, I don' understand use case of sheet_name_special, so was removed from the grammar
+*/
+cell_reference = { external_cell_reference | a1_reference }
+external_cell_reference = { sheets_prefix ~ a1_reference }
+book_prefix = { workbook_index ~ exclamation } 
+sheets_prefix = { single_sheet_prefix | sheet_range ~ exclamation } 
+single_sheet_prefix = { single_sheet ~ exclamation }
+single_sheet = { workbook_index? ~ sheet_name } //| apostrophe ~ workbook_index? ~ sheet_name_special ~ apostrophe }
+sheet_range = { workbook_index? ~  sheet_name ~  colon ~  sheet_name } //|apostrophe ~ workbook_index? ~ sheet_name_special ~  colon ~  sheet_name_special ~   apostrophe } 
+workbook_index = { "[" ~ whole_number_part ~ "]" }
+sheet_name = { sheet_name_characters }
+sheet_name_characters =  { sheet_name_character+ }
+sheet_name_character = { !(operator | apostrophe | "[" | "]" | "\\" | "?") ~ character }
+apostrophe = { "'" }
+exclamation = { "!" }
+/*
+sheet_name_special = { sheet_name_start_character_special ~ (sheet_name_characters_special? ~ sheet_name_end_character_special)? }
+sheet_name_start_character_special = { !(apostrophe | "*" | "[" | "]" | "\\" | ":" | "/" | "?" | "\u{03}" ) ~ character }
+sheet_name_end_character_special = { sheet_name_start_character_special }
+sheet_name_characters_special = { sheet_name_character_special+ }
+sheet_name_character_special = { apostrophe ~ apostrophe | !(apostrophe  |  "*"  |  "["  |  "]"  |  "\\"  |  ":"  |  "/"|  "?" | "\u{03}" ) ~ character }
+*/
+
+/*
+Excel a1 Style Cell reference https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/3b539277-da4f-49d0-94d4-84d9256afb36
+*/
+a1_reference = {a1_column ~ colon ~ a1_column | a1_row ~ colon ~ a1_row | a1_cell ~ colon ~ a1_cell | a1_cell }
+a1_cell = { a1_column ~ a1_row }
+a1_column = { a1_relative_column | a1_absolute_column }
+a1_relative_column = @{ letter+ }
+letter = { ASCII_ALPHA }
+dollar = { "$" }
+a1_absolute_column = { dollar ~ a1_relative_column }
+a1_row = { a1_relative_row | a1_absolute_row }
+a1_relative_row = @{ nonzero_digit_sequence }
+a1_absolute_row = { dollar ~ a1_relative_row }
+
+/*
+Excel R1C1 style https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/8d68c790-0571-44f6-8583-f837e72635ed
+*/
+ r1c1_reference = { r1c1_row_only | r1c1_column_only | r1c1_cell ~ ":" ~ r1c1_cell | r1c1_cell }
+ r1c1_cell = { r1c1_row ~ r1c1_column }
+ r1c1_row_only = { "R" ~ r1c1_absolute_number | "R[" ~ r1c1_relative_number ~ "]" }
+ r1c1_row = { r1c1_relative_row | r1c1_absolute_row }
+ r1c1_relative_row = {"R" | "R[" ~ r1c1_relative_number ~ "]" } 
+ r1c1_absolute_row = { "R" ~ r1c1_absolute_number }
+ r1c1_column_only = { "C" ~ r1c1_absolute_number | "C[" ~ r1c1_relative_number ~ "]" }
+ r1c1_column = { r1c1_relative_column | r1c1_absolute_column }
+ r1c1_relative_column = {"C" | "C[" ~ r1c1_relative_number ~ "]" }
+ r1c1_absolute_column = {"C" ~ r1c1_absolute_number }
+ r1c1_relative_number = { "-"? ~ digit_sequence }
+ r1c1_absolute_number = { nonzero_digit_sequence }
+/*
+Excel Functions https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/364a8913-49b5-46aa-9cd5-bc8180948a2a
+*/
+function_call = { function_name ~ "(" ~  argument_list? ~  ")" }
+function_name = @{ user_defined_function_name }
+//function_name = { predefined_function_name | user_defined_function_name }
+// predefined_function_name=
+//"ABS"  |  "ACOS"  |  "ACOSH"
+//|  ( any of the other functions defined in Predefined Function Definitions ("[ISO/IEC-29500-1] §18.17.7"))
+user_defined_function_name = { name_reference }
+argument_list = { argument ~ (comma ~ argument)* }
+argument = { expression }
+/*
+Excel Names https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/1399f3cb-927c-4611-96ee-666143a8be35
+*/
+name_reference = { name | external_name }
+external_name = { single_sheet_prefix ~ name }
+name = @{ name_start_character ~ name_characters* }
+name_start_character = { underscore  |  backslash  |  LETTER }
+underscore = { "_" }
+backslash ={ "\\" }
+name_characters = { name_character+ }
+name_character = { name_start_character  |  DECIMAL_NUMBER  |  full_stop }
