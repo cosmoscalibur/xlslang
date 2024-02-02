@@ -93,22 +93,20 @@ operator = { ref_operator | infix_operator | postfix_operator }
 
 /*
 Excel Cell Reference https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/3c420ebb-6ef1-4b0d-959d-76e88c841c3e
-Sorry, I don' understand use case of sheet_name_special, so was removed from the grammar
 */
 cell_reference = { external_cell_reference | a1_reference }
 external_cell_reference = { sheets_prefix ~ a1_reference }
-book_prefix = { workbook_index ~ exclamation } 
 sheets_prefix = { single_sheet_prefix | sheet_range ~ exclamation } 
 single_sheet_prefix = { single_sheet ~ exclamation }
 single_sheet = { workbook_index? ~ sheet_name  | apostrophe ~ workbook_index? ~ sheet_name_special ~ apostrophe }
 sheet_range = { workbook_index? ~  sheet_name ~  colon ~  sheet_name | apostrophe ~ workbook_index? ~ sheet_name_special ~  colon ~  sheet_name_special ~   apostrophe } 
 workbook_index = { "[" ~ whole_number_part ~ "]" }
-sheet_name = { sheet_name_characters }
+sheet_name = @{ sheet_name_characters }
 sheet_name_characters =  { sheet_name_character+ }
 sheet_name_character = { !(operator | apostrophe | exclamation | "[" | "]" | "\\" | "?") ~ character }
 apostrophe = { "'" }
 exclamation = { "!" }
-sheet_name_special = { sheet_name_start_character_special ~ (sheet_name_characters_special? ~ sheet_name_end_character_special)? }
+sheet_name_special = @{ sheet_name_start_character_special ~ (sheet_name_characters_special? ~ sheet_name_end_character_special)? }
 sheet_name_start_character_special = { sheet_name_character_special_no_apostrophe }
 sheet_name_end_character_special = { sheet_name_start_character_special ~ &(apostrophe ~ exclamation) }
 sheet_name_characters_special = { sheet_name_character_special+ }
