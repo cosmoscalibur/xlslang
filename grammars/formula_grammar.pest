@@ -100,21 +100,20 @@ external_cell_reference = { sheets_prefix ~ a1_reference }
 book_prefix = { workbook_index ~ exclamation } 
 sheets_prefix = { single_sheet_prefix | sheet_range ~ exclamation } 
 single_sheet_prefix = { single_sheet ~ exclamation }
-single_sheet = { workbook_index? ~ sheet_name } //| apostrophe ~ workbook_index? ~ sheet_name_special ~ apostrophe }
-sheet_range = { workbook_index? ~  sheet_name ~  colon ~  sheet_name } //|apostrophe ~ workbook_index? ~ sheet_name_special ~  colon ~  sheet_name_special ~   apostrophe } 
+single_sheet = { workbook_index? ~ sheet_name  | apostrophe ~ workbook_index? ~ sheet_name_special ~ apostrophe }
+sheet_range = { workbook_index? ~  sheet_name ~  colon ~  sheet_name | apostrophe ~ workbook_index? ~ sheet_name_special ~  colon ~  sheet_name_special ~   apostrophe } 
 workbook_index = { "[" ~ whole_number_part ~ "]" }
 sheet_name = { sheet_name_characters }
 sheet_name_characters =  { sheet_name_character+ }
 sheet_name_character = { !(operator | apostrophe | "[" | "]" | "\\" | "?") ~ character }
 apostrophe = { "'" }
 exclamation = { "!" }
-/*
 sheet_name_special = { sheet_name_start_character_special ~ (sheet_name_characters_special? ~ sheet_name_end_character_special)? }
-sheet_name_start_character_special = { !(apostrophe | "*" | "[" | "]" | "\\" | ":" | "/" | "?" | "\u{03}" ) ~ character }
-sheet_name_end_character_special = { sheet_name_start_character_special }
+sheet_name_start_character_special = { sheet_name_character_special_no_apostrophe }
+sheet_name_end_character_special = { sheet_name_start_character_special ~ &(apostrophe ~ exclamation) }
 sheet_name_characters_special = { sheet_name_character_special+ }
-sheet_name_character_special = { apostrophe ~ apostrophe | !(apostrophe  |  "*"  |  "["  |  "]"  |  "\\"  |  ":"  |  "/"|  "?" | "\u{03}" ) ~ character }
-*/
+sheet_name_character_special = { apostrophe ~ apostrophe | sheet_name_character_special_no_apostrophe ~ !(apostrophe ~ exclamation) }
+sheet_name_character_special_no_apostrophe = { !(apostrophe  |  "*"  |  "["  |  "]"  |  "\\"  |  ":"  |  "/"|  "?" | "\u{03}" ) ~ character }
 
 /*
 Excel a1 Style Cell reference https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/3b539277-da4f-49d0-94d4-84d9256afb36
@@ -132,19 +131,10 @@ a1_absolute_row = { dollar ~ a1_relative_row }
 
 /*
 Excel R1C1 style https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/8d68c790-0571-44f6-8583-f837e72635ed
+Not support because in Excel require change in UI and not use A1 style.
 */
- r1c1_reference = { r1c1_row_only | r1c1_column_only | r1c1_cell ~ ":" ~ r1c1_cell | r1c1_cell }
- r1c1_cell = { r1c1_row ~ r1c1_column }
- r1c1_row_only = { "R" ~ r1c1_absolute_number | "R[" ~ r1c1_relative_number ~ "]" }
- r1c1_row = { r1c1_relative_row | r1c1_absolute_row }
- r1c1_relative_row = {"R" | "R[" ~ r1c1_relative_number ~ "]" } 
- r1c1_absolute_row = { "R" ~ r1c1_absolute_number }
- r1c1_column_only = { "C" ~ r1c1_absolute_number | "C[" ~ r1c1_relative_number ~ "]" }
- r1c1_column = { r1c1_relative_column | r1c1_absolute_column }
- r1c1_relative_column = {"C" | "C[" ~ r1c1_relative_number ~ "]" }
- r1c1_absolute_column = {"C" ~ r1c1_absolute_number }
- r1c1_relative_number = { "-"? ~ digit_sequence }
- r1c1_absolute_number = { nonzero_digit_sequence }
+
+
 /*
 Excel Functions https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oi29500/364a8913-49b5-46aa-9cd5-bc8180948a2a
 */
