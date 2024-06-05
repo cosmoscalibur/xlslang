@@ -100,7 +100,15 @@ sheets_prefix = { single_sheet_prefix | sheet_range ~ exclamation }
 single_sheet_prefix = { single_sheet ~ exclamation }
 single_sheet = { workbook_index? ~ sheet_name  | apostrophe ~ workbook_index? ~ sheet_name_special ~ apostrophe }
 sheet_range = { workbook_index? ~  sheet_name ~  colon ~  sheet_name | apostrophe ~ workbook_index? ~ sheet_name_special ~  colon ~  sheet_name_special ~   apostrophe } 
-workbook_index = { "[" ~ whole_number_part ~ "]" }
+/*
+whole number part change to workbook name to more general
+*/
+workbook_index = { "[" ~ workbook_name ~ "]" }
+workbook_name = @{ workbook_name_character_start ~ (workbook_name_characters? ~ workbook_name_character_end)? }
+workbook_name_characters = { workbook_name_character+ }
+workbook_name_character = { (sheet_name_character_special_no_apostrophe | apostrophe) ~ ! "]" }
+workbook_name_character_end = { sheet_name_character_special_no_apostrophe ~ & "]" }
+workbook_name_character_start = { sheet_name_character_special_no_apostrophe }
 sheet_name = @{ sheet_name_characters }
 sheet_name_characters =  { sheet_name_character+ }
 sheet_name_character = { !(operator | apostrophe | exclamation | "[" | "]" | "\\" | "?") ~ character }
