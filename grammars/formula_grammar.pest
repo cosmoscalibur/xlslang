@@ -111,7 +111,10 @@ workbook_name_character_end = { sheet_name_character_special_no_apostrophe ~ & "
 workbook_name_character_start = { sheet_name_character_special_no_apostrophe }
 sheet_name = @{ sheet_name_characters }
 sheet_name_characters =  { sheet_name_character+ }
-sheet_name_character = { !(operator | apostrophe | exclamation | "[" | "]" | "\\" | "?") ~ character }
+/*
+( and ) not included in original specs
+*/
+sheet_name_character = { !(operator | apostrophe | exclamation | "[" | "]" | "\\" | "?" | "(" | ")" ) ~ character }
 apostrophe = { "'" }
 exclamation = { "!" }
 sheet_name_special = @{ sheet_name_start_character_special ~ (sheet_name_characters_special? ~ sheet_name_end_character_special)? }
@@ -146,6 +149,9 @@ Excel Functions https://learn.microsoft.com/en-us/openspecs/office_standards/ms-
 */
 function_call = { function_name ~ "(" ~  argument_list? ~  ")" }
 function_name = @{ user_defined_function_name }
+/*
+Implement based on user defined rule, not on predefined in grammar
+*/
 //function_name = { predefined_function_name | user_defined_function_name }
 // predefined_function_name=
 //"ABS"  |  "ACOS"  |  "ACOSH"
