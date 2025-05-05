@@ -6,3 +6,6 @@ __pycache__/
 *.dot
 
 .vscode
+
+# Rust
+target/
