@@ -1,0 +1,9 @@
+[package]
+name = "xlslang"
+version = "0.1.0"
+authors = ["Edward Villegas-Pulgarin <cosmoscalibur@gmail.com>"]
+edition = "2024"
+
+[dependencies]
+zip = "2.5.0"
+quick-xml = "0.37.5"
