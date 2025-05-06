@@ -1,8 +1,16 @@
 [package]
 name = "xlslang"
 version = "0.2.0"
-authors = ["Edward Villegas-Pulgarin <cosmoscalibur@gmail.com>"]
 edition = "2024"
+description = "Excel compiler and command line tools"
+readme = "README.md"
+rust-version = "1.86.0"
+documentation = "https://github.com/cosmoscalibur/xlslang"
+homepage = "https://github.com/cosmoscalibur/xlslang"
+repository = "https://github.com/cosmoscalibur/xlslang"
+license = "MIT"
+keywords = ["excel", "compiler", "command line"]
+categories = ["command-line-utilities", "compilers", "parser-implementations"]
 
 [dependencies]
 zip = "2.5.0"
