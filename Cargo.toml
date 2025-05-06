@@ -1,17 +1,10 @@
-[package]
-name = "xlslang"
-version = "0.2.0"
-edition = "2024"
-description = "Excel compiler and command line tools"
-readme = "README.md"
-rust-version = "1.86.0"
-documentation = "https://github.com/cosmoscalibur/xlslang"
-homepage = "https://github.com/cosmoscalibur/xlslang"
-repository = "https://github.com/cosmoscalibur/xlslang"
-license = "MIT"
-keywords = ["excel", "compiler", "command line"]
-categories = ["command-line-utilities", "compilers", "parser-implementations"]
+[workspace]
+members = ["xlschecks", "xlslang", "xlslang-file"]
+resolver = "2"
 
-[dependencies]
+[workspace.dependencies]
 zip = "2.5.0"
 quick-xml = "0.37.5"
+
+xlslang-file = { path = "xlslang-file" }
+xlschecks = { path = "xlschecks" }

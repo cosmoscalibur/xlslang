@@ -1,0 +1,21 @@
+[package]
+name = "xlslang-file"
+version = "0.3.0"
+edition = "2024"
+description = "Excel file manipulation library"
+readme = "README.md"
+rust-version = "1.86.0"
+documentation = "https://github.com/cosmoscalibur/xlslang"
+homepage = "https://github.com/cosmoscalibur/xlslang"
+repository = "https://github.com/cosmoscalibur/xlslang"
+license = "MIT"
+keywords = ["excel", "compiler", "command line"]
+categories = ["command-line-utilities", "compilers", "parser-implementations"]
+
+[dependencies]
+zip.workspace = true
+quick-xml.workspace = true
+
+[lib]
+name = "xlslang_file"
+path = "src/lib.rs"

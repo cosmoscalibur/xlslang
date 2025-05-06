@@ -1,0 +1,20 @@
+[package]
+name = "xlschecks"
+version = "0.2.1"
+edition = "2024"
+description = "Excel linter library"
+readme = "README.md"
+rust-version = "1.86.0"
+documentation = "https://github.com/cosmoscalibur/xlslang"
+homepage = "https://github.com/cosmoscalibur/xlslang"
+repository = "https://github.com/cosmoscalibur/xlslang"
+license = "MIT"
+keywords = ["excel", "compiler", "command line"]
+categories = ["command-line-utilities", "compilers", "parser-implementations"]
+
+[dependencies]
+quick-xml.workspace = true
+
+[lib]
+name = "xlschecks"
+path = "src/lib.rs"
