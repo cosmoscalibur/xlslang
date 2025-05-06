@@ -32,7 +32,7 @@ https://twitter.com/cosmoscalibur/status/1462102290555359237
 Binary tool to detect invalid formulas in Excel files (error cells). Run as
 
 ```bash
-cargo run --bin xlscheck file.xlsx
+cargo run --bin xlschecks file.xlsx
 ```
 
 - [x] Main binary to detect invalid formulas.
