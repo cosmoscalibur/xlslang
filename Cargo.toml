@@ -1,0 +1,7 @@
+[package]
+name = "xlslang"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+pest = "2.8.0"
