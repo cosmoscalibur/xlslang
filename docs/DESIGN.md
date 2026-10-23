@@ -155,10 +155,12 @@ the reader's own that is neither LibreOffice's nor Excel's (one lower from
 1900-03-01 on), and `office:time-value` was returned as display text. Dates are
 now days since the document's `table:null-date`, times a fraction of a day. No
 calendar adjustment happens in the reader; the date system (`1899`, `1900`,
-`1904`) is applied by the engine. Remaining reader-side items (documented in
-FIDELITY.md) are an upstream wish list: typed values, formula-string results that
-look numeric, `#VALUE!` placeholders, document calculation settings, defined-name
-scope.
+`1904`) is applied by the engine. The reader also exposes the calculation settings a document stores
+(`Workbook::settings`: iteration, search mode, case sensitivity, two-digit-year
+window, language) **as stored, with no defaults applied**, so the engine can tell
+"not stated" from "stated as the default". Remaining reader-side items
+(FIDELITY.md) are an upstream wish list: typed values, formula-string results
+that look numeric, `#VALUE!` placeholders, defined-name scope.
 
 ## Inputs and outputs are ranges
 
@@ -269,8 +271,6 @@ predicates (`Expr`) attached to input bindings, evaluated before the run:
 
 ### Engine
 
-* Read ODS calculation settings (regex/wildcards, null date, iteration) from the
-  file and map them to engine options.
 * Segment-tree dependency nodes; hash index cache for exact `VLOOKUP`/`MATCH`.
 * Narrow dynamic reachability from `INDIRECT`/`OFFSET` argument shapes.
 * Incremental recalculation for `--serve` (re-evaluate only the cone of the

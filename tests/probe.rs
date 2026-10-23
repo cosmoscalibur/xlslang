@@ -10,30 +10,19 @@ use serde_json::{Value as Json, json};
 use std::path::Path;
 use xlslang::addr::CellRef;
 use xlslang::ir::Ns;
+use xlslang::options::SearchMode;
 use xlslang::value::Value;
 use xlslang::{BindingSpec, Model, Overrides, Spec, compile, loader};
 
 /// Probes the engine deliberately does not reproduce, with the reason.
 const NOT_REPRODUCED: &[(&str, &str)] = &[
     (
-        "UPPER(\"ß\")",
-        "Unicode case mapping: LibreOffice gives ẞ, the engine SS (Rust `to_uppercase`)",
-    ),
-    (
         "TRIM(CHAR(160)&\"a\")",
         "CHAR(160) depends on the code page; LibreOffice yields U+FFFD",
     ),
     (
-        "DATEDIF(DATE(2024,1,31),DATE(2024,3,1),\"MD\")",
-        "DATEDIF unit \"MD\" is not implemented",
-    ),
-    (
-        "DAYS(\"2024-03-01\",\"2024-02-01\")",
-        "LibreOffice 24.2 reads DAYS without the _xlfn. prefix as unknown",
-    ),
-    (
-        "DATEVALUE(\"3/1/2024\")",
-        "text dates are parsed in ISO form only (locale-bound formats are not implemented)",
+        "_xlfn.DAYS(\"2024-03-01\",\"2024-02-01\")",
+        "LibreOffice 24.2 does not know DAYS",
     ),
 ];
 
@@ -71,11 +60,13 @@ fn label(m: &Model, calc: u16, row: u32) -> String {
     }
 }
 
-#[test]
-fn ods_dialect_reproduces_libreoffice() {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/assets/probe.ods");
+fn reproduces(file: &str, expect: impl Fn(&Model)) {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/assets")
+        .join(file);
     let m = loader::load(&path).unwrap();
     assert_eq!(m.dialect, Ns::Ods);
+    expect(&m);
     let calc = m.sheet_id("Calc").unwrap();
     let n = m
         .cells
@@ -102,10 +93,45 @@ fn ods_dialect_reproduces_libreoffice() {
     }
     assert!(
         bad.is_empty(),
-        "{} mismatches:\n{}",
+        "{file}: {} mismatches:\n{}",
         bad.len(),
         bad.join("\n")
     );
+}
+
+#[test]
+fn ods_dialect_reproduces_libreoffice() {
+    reproduces("probe.ods", |m| {
+        let s = m.settings.search.unwrap();
+        assert_eq!(
+            (s.mode, s.case_sensitive, s.whole_cell),
+            (SearchMode::Wildcards, false, true)
+        );
+    });
+}
+
+/// Native ODS settings the file states: regular expressions, case-sensitive,
+/// partial-cell matching.
+#[test]
+fn document_search_settings_regex_mode() {
+    reproduces("probe_regex.ods", |m| {
+        let s = m.settings.search.unwrap();
+        assert_eq!(
+            (s.mode, s.case_sensitive, s.whole_cell),
+            (SearchMode::Regex, true, false)
+        );
+    });
+}
+
+#[test]
+fn document_search_settings_literal_mode() {
+    reproduces("probe_literal.ods", |m| {
+        let s = m.settings.search.unwrap();
+        assert_eq!(
+            (s.mode, s.case_sensitive, s.whole_cell),
+            (SearchMode::Literal, false, true)
+        );
+    });
 }
 
 /// The documented differences, pinned: under the Excel dialect the same
@@ -134,6 +160,19 @@ fn excel_dialect_differs_where_documented() {
         ("YEAR(0)", json!(1899), json!(1900)),
         ("DATE(1850,1,1)", json!(-18260), json!(675701)), // Excel: 1850 + 1900 = 3750
         ("DATE(29,1,1)", json!(47119), json!(10594)),
+        (
+            "DATEVALUE(\"1 Mar 2024\")",
+            common::err("#VALUE!"),
+            json!(45352),
+        ),
+        (
+            "DATEVALUE(\"2024/03/01\")",
+            common::err("#VALUE!"),
+            json!(45352),
+        ),
+        ("DATEVALUE(\"1-Mar-2024\")", json!(45352), json!(45352)),
+        ("UPPER(\"ß\")", json!("ẞ"), json!("ß")),
+        ("UPPER(\"straße\")", json!("STRAẞE"), json!("STRAßE")),
     ];
     for (f, lo, xl) in cases {
         assert_eq!(&calc(f, Ns::Ods), lo, "ods: {f}");

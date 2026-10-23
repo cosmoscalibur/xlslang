@@ -4,7 +4,7 @@ use super::{Reg, VAR, num, opt, opt_num};
 use crate::coerce;
 use crate::engine::{Engine, Res};
 use crate::format;
-use crate::functions::stats::wildcard;
+use crate::matching::Matcher;
 use crate::value::{ErrorKind, Value};
 
 pub(super) fn register(r: &mut Reg) {
@@ -28,21 +28,29 @@ pub(super) fn register(r: &mut Reg) {
         num(e.text(&a[0])?.chars().count() as f64)
     });
     r.eager("UPPER", 1, 1, |e, a| {
-        Ok(Value::text(e.text(&a[0])?.to_uppercase()))
+        let lo = e.opts.bool_is_number();
+        Ok(Value::text(
+            e.text(&a[0])?
+                .chars()
+                .map(|c| upper_char(c, lo))
+                .collect::<String>(),
+        ))
     });
     r.eager("LOWER", 1, 1, |e, a| {
-        Ok(Value::text(e.text(&a[0])?.to_lowercase()))
+        Ok(Value::text(
+            e.text(&a[0])?.chars().map(lower_char).collect::<String>(),
+        ))
     });
     r.eager("PROPER", 1, 1, |e, a| {
         let mut out = String::new();
         let mut start = true;
         for c in e.text(&a[0])?.chars() {
             if c.is_alphabetic() {
-                if start {
-                    out.extend(c.to_uppercase());
+                out.push(if start {
+                    upper_char(c, e.opts.bool_is_number())
                 } else {
-                    out.extend(c.to_lowercase());
-                }
+                    lower_char(c)
+                });
                 start = false;
             } else {
                 out.push(c);
@@ -248,6 +256,28 @@ fn concat(e: &mut Engine, a: &[Value], flatten: bool) -> Res<Value> {
     Ok(Value::text(out))
 }
 
+/// Spreadsheets map case one character at a time: a character whose uppercase
+/// is several characters (`ß` → `SS` in full Unicode mapping) is left alone,
+/// except that LibreOffice (`lo`) maps `ß` to the capital sharp s `ẞ`.
+fn upper_char(c: char, lo: bool) -> char {
+    if c == 'ß' && lo {
+        return 'ẞ';
+    }
+    let mut it = c.to_uppercase();
+    match (it.next(), it.next()) {
+        (Some(u), None) => u,
+        _ => c,
+    }
+}
+
+fn lower_char(c: char) -> char {
+    let mut it = c.to_lowercase();
+    match (it.next(), it.next()) {
+        (Some(l), None) => l,
+        _ => c,
+    }
+}
+
 fn find(e: &mut Engine, a: &[Value], case_sensitive: bool) -> Res<Value> {
     let needle = e.text(&a[0])?;
     let hay: Vec<char> = e.text(&a[1])?.chars().collect();
@@ -256,22 +286,20 @@ fn find(e: &mut Engine, a: &[Value], case_sensitive: bool) -> Res<Value> {
         return Err(ErrorKind::Value);
     }
     let from = start as usize - 1;
-    let nd: Vec<char> = needle.chars().collect();
-    for i in from..=hay.len() {
-        let hit = if case_sensitive {
-            hay[i..].starts_with(&nd)
-        } else {
-            // SEARCH: wildcards match a window of the same size or longer.
-            wildcard_prefix(&needle, &hay[i..])
-        };
-        if hit {
-            return num((i + 1) as f64);
-        }
+    if case_sensitive {
+        // FIND: literal and case-sensitive.
+        let nd: Vec<char> = needle.chars().collect();
+        return (from..=hay.len())
+            .find(|&i| hay[i..].starts_with(&nd))
+            .map_or(Err(ErrorKind::Value), |i| num((i + 1) as f64));
     }
-    Err(ErrorKind::Value)
-}
-
-/// Whether `pat` (with `*`/`?`) matches some prefix of `text`.
-fn wildcard_prefix(pat: &str, text: &[char]) -> bool {
-    (0..=text.len()).any(|n| wildcard(pat, &text[..n].iter().collect::<String>()))
+    // SEARCH: case-insensitive; patterns follow the document's search mode.
+    let search = crate::options::Search {
+        case_sensitive: false,
+        ..e.opts.search
+    };
+    let m = Matcher::new(&needle, &search, false);
+    let rest: String = hay[from..].iter().collect();
+    m.find(&rest)
+        .map_or(Err(ErrorKind::Value), |i| num((from + i + 1) as f64))
 }

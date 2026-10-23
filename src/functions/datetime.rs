@@ -13,13 +13,9 @@ pub(super) fn register(r: &mut Reg) {
             e.num(&a[2])?.trunc() as i64,
         );
         // Excel reads 0–1899 as an offset from 1900; LibreOffice only
-        // reinterprets two-digit years (30–99 → 19xx, 0–29 → 20xx).
+        // reinterprets two-digit years in the document's 100-year window.
         if e.opts.bool_is_number() {
-            if (0..30).contains(&y) {
-                y += 2000;
-            } else if (30..100).contains(&y) {
-                y += 1900;
-            }
+            y = crate::coerce::expand_year(y, e.opts.locale.two_digit_year_start);
         } else if (0..1900).contains(&y) {
             y += 1900;
         }
@@ -58,7 +54,7 @@ pub(super) fn register(r: &mut Reg) {
         .volatile();
     r.eager("DATEVALUE", 1, 1, |e, a| {
         let t = e.text(&a[0])?;
-        crate::coerce::parse_number(&t, &e.opts.locale, e.opts.date_system)
+        crate::coerce::parse_date_text(&t, &e.opts.locale, e.opts.date_system)
             .map_or(Err(ErrorKind::Value), |n| num(n.floor()))
     });
     r.eager("WEEKDAY", 1, 2, |e, a| {
@@ -94,6 +90,20 @@ pub(super) fn register(r: &mut Reg) {
             "M" => num(months as f64),
             "Y" => num((months / 12) as f64),
             "YM" => num((months % 12) as f64),
+            // Days ignoring months and years: the end day against the start
+            // day, borrowing the length of the month before the end date.
+            "MD" => num(if d2 >= d1 {
+                (d2 - d1) as f64
+            } else {
+                let (py, pm) = if m2 == 1 { (y2 - 1, 12) } else { (y2, m2 - 1) };
+                (dates::days_in_month(py, pm) + d2 - d1) as f64
+            }),
+            // Days ignoring years: from the latest anniversary of the start.
+            "YD" => {
+                let anniv = |y| dates::ymd_to_serial(y, m1, d1, sys);
+                let a = anniv(y2).filter(|a| *a <= t).or_else(|| anniv(y2 - 1));
+                a.map_or(Err(ErrorKind::Num), |a| num(t - a))
+            }
             _ => Err(ErrorKind::Num),
         }
     });

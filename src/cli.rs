@@ -1,7 +1,7 @@
 //! Command-line plumbing shared by the compiler binary and the runtime stub.
 
 use crate::ir::Program;
-use crate::options::{DateSystem, Iteration, Locale};
+use crate::options::{DateSystem, Iteration, Locale, SearchMode};
 use crate::run::Overrides;
 use std::io::{BufRead, Read, Write};
 
@@ -100,8 +100,34 @@ pub fn parse_overrides(args: &mut Args) -> Result<Overrides, String> {
                 .ok_or_else(|| format!("--dialect must be core, xlsx or ods, got `{v}`"))?,
         );
     }
+    if let Some(v) = args.value("--search")? {
+        o.search_mode = Some(match v.as_str() {
+            "wildcards" => SearchMode::Wildcards,
+            "regex" => SearchMode::Regex,
+            "literal" => SearchMode::Literal,
+            _ => {
+                return Err(format!(
+                    "--search must be wildcards, regex or literal, got `{v}`"
+                ));
+            }
+        });
+    }
+    if args.flag("--case-sensitive") {
+        o.case_sensitive = Some(true);
+    } else if args.flag("--case-insensitive") {
+        o.case_sensitive = Some(false);
+    }
+    if args.flag("--whole-cell") {
+        o.whole_cell = Some(true);
+    } else if args.flag("--partial-cell") {
+        o.whole_cell = Some(false);
+    }
     if let Some(v) = args.value("--locale")? {
-        o.locale = Some(parse_locale(&v)?);
+        if v == "document" {
+            o.locale_from_document = true;
+        } else {
+            o.locale = Some(parse_locale(&v)?);
+        }
     }
     if let Some(v) = args.value("--now")? {
         o.now = Some(
@@ -138,7 +164,9 @@ Options:
   --pretty             indent the JSON output
   --info               describe the inputs and outputs of this program
   --date-system 1899|1900|1904   --dialect core|xlsx|ods   --iterate[=N[,EPS]] | --no-iterate
-  --locale en|es|de|fr      --now SERIAL   --seed N";
+  --locale en|es|de|fr|document      --now SERIAL   --seed N
+  --search wildcards|regex|literal   --case-sensitive|--case-insensitive
+  --whole-cell|--partial-cell";
 
 /// Execute a program according to command-line arguments. Returns the exit
 /// code: 0 on success, 1 on a failed run, 2 on bad arguments.

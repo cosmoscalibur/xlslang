@@ -128,7 +128,8 @@ impl Value {
 
 /// Spreadsheet ordering of two scalars. `Empty` takes the type of the other
 /// operand; text compares case-insensitively.
-pub fn compare(a: &Value, b: &Value) -> Ordering {
+/// `case_sensitive`: text compares exactly instead of ignoring case.
+pub fn compare(a: &Value, b: &Value, case_sensitive: bool) -> Ordering {
     let (a, b) = match (a, b) {
         (Value::Empty, Value::Text(_)) => (&Value::Text(Arc::from("")), b),
         (Value::Text(_), Value::Empty) => (a, &Value::Text(Arc::from(""))),
@@ -137,7 +138,13 @@ pub fn compare(a: &Value, b: &Value) -> Ordering {
         _ => (a, b),
     };
     match (a, b) {
-        (Value::Text(x), Value::Text(y)) => cmp_text(x, y),
+        (Value::Text(x), Value::Text(y)) => {
+            if case_sensitive {
+                cmp_text_cs(x, y)
+            } else {
+                cmp_text(x, y)
+            }
+        }
         (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
         (Value::Empty | Value::Number(_), Value::Empty | Value::Number(_)) => {
             let x = if let Value::Number(n) = a { *n } else { 0.0 };
@@ -152,4 +159,22 @@ pub fn cmp_text(x: &str, y: &str) -> Ordering {
     x.chars()
         .flat_map(char::to_lowercase)
         .cmp(y.chars().flat_map(char::to_lowercase))
+}
+
+/// Case-sensitive text order as a collator gives it: letters compare first
+/// ignoring case (`abc` < `ABD`), and only when equal does case decide, with
+/// lowercase first (`a` < `A`).
+pub fn cmp_text_cs(x: &str, y: &str) -> Ordering {
+    cmp_text(x, y).then_with(|| {
+        for (a, b) in x.chars().zip(y.chars()) {
+            if a != b {
+                return if a.is_lowercase() {
+                    Ordering::Less
+                } else {
+                    Ordering::Greater
+                };
+            }
+        }
+        Ordering::Equal
+    })
 }

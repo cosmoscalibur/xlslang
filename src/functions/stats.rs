@@ -3,6 +3,7 @@
 use super::{Reg, VAR, num, opt};
 use crate::coerce;
 use crate::engine::{Engine, Res};
+use crate::matching::Matcher;
 use crate::value::{Array, ErrorKind, Value, cmp_text, compare};
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -138,10 +139,11 @@ fn variance(e: &mut Engine, a: &[Value], sample: bool) -> Res<f64> {
 
 // ----- criteria -----
 
-#[derive(Debug)]
 pub(crate) enum Criterion {
     Num(Cmp, f64),
-    Text(Cmp, String),
+    /// Text criterion: the operator, the matcher for `=`/`<>` and the plain
+    /// text for ordering operators.
+    Text(Cmp, Matcher, String, bool),
     Blank(bool),
 }
 
@@ -180,7 +182,15 @@ impl Criterion {
                 }
                 match coerce::parse_number(rest, &e.opts.locale, e.opts.date_system) {
                     Some(n) => Ok(Self::Num(op, n)),
-                    None => Ok(Self::Text(op, rest.to_string())),
+                    None => {
+                        let s = e.opts.search;
+                        Ok(Self::Text(
+                            op,
+                            Matcher::new(rest, &s, s.whole_cell),
+                            rest.to_string(),
+                            false,
+                        ))
+                    }
                 }
             }
             _ => Err(ErrorKind::Value),
@@ -204,11 +214,18 @@ impl Criterion {
                 Value::Empty if *op == Cmp::Ne => true,
                 _ => false,
             },
-            Self::Text(op, pat) => match v {
+            Self::Text(op, m, pat, cs) => match v {
                 Value::Text(t) => match op {
-                    Cmp::Eq => wildcard(pat, t),
-                    Cmp::Ne => !wildcard(pat, t),
-                    _ => apply(*op, Some(cmp_text(t, pat))),
+                    Cmp::Eq => m.is_match(t),
+                    Cmp::Ne => !m.is_match(t),
+                    _ => apply(
+                        *op,
+                        Some(if *cs {
+                            t.as_ref().cmp(pat.as_str())
+                        } else {
+                            cmp_text(t, pat)
+                        }),
+                    ),
                 },
                 Value::Empty | Value::Number(_) | Value::Bool(_) | Value::Error(_) => {
                     *op == Cmp::Ne
@@ -229,24 +246,6 @@ fn apply(op: Cmp, ord: Option<Ordering>) -> bool {
         Cmp::Gt => o == Ordering::Greater,
         Cmp::Ge => o != Ordering::Less,
     }
-}
-
-/// Case-insensitive match with `*`, `?` and `~` escapes.
-pub(crate) fn wildcard(pat: &str, text: &str) -> bool {
-    let p: Vec<char> = pat.chars().flat_map(char::to_lowercase).collect();
-    let t: Vec<char> = text.chars().flat_map(char::to_lowercase).collect();
-    fn go(p: &[char], t: &[char]) -> bool {
-        match p.split_first() {
-            None => t.is_empty(),
-            Some((&'*', rest)) => (0..=t.len()).any(|i| go(rest, &t[i..])),
-            Some((&'?', rest)) => !t.is_empty() && go(rest, &t[1..]),
-            Some((&'~', rest)) if !rest.is_empty() => {
-                !t.is_empty() && t[0] == rest[0] && go(&rest[1..], &t[1..])
-            }
-            Some((c, rest)) => !t.is_empty() && t[0] == *c && go(rest, &t[1..]),
-        }
-    }
-    go(&p, &t)
 }
 
 #[derive(Clone, Copy)]
@@ -319,9 +318,10 @@ fn multi(e: &mut Engine, a: &[Value], agg: Agg) -> Res<Value> {
 /// Shared with MATCH-style lookups.
 pub(crate) fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
+        // Lookups and criteria ignore case whatever the comparison setting says.
         (Value::Text(x), Value::Text(y)) => cmp_text(x, y) == Ordering::Equal,
         (Value::Number(_) | Value::Bool(_), Value::Text(_))
         | (Value::Text(_), Value::Number(_) | Value::Bool(_)) => false,
-        _ => compare(a, b) == Ordering::Equal,
+        _ => compare(a, b, false) == Ordering::Equal,
     }
 }

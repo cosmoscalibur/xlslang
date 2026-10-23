@@ -22,6 +22,7 @@ pub mod graph;
 pub mod ir;
 #[cfg(feature = "load")]
 pub mod loader;
+pub mod matching;
 pub mod model;
 pub mod options;
 pub mod run;

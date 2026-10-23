@@ -3,7 +3,7 @@
 use crate::addr::{CellRef, Rect};
 use crate::engine::Engine;
 use crate::ir::{Binding, Ns, Program};
-use crate::options::{DateSystem, EngineOptions, Iteration, Locale};
+use crate::options::{DateSystem, EngineOptions, Iteration, Locale, SearchMode};
 use crate::value::{ErrorKind, Value};
 use serde_json::{Map, Number, Value as Json};
 use std::sync::Arc;
@@ -30,7 +30,12 @@ pub struct Overrides {
     /// `Some(None)` disables iteration.
     pub iteration: Option<Option<Iteration>>,
     pub locale: Option<Locale>,
+    /// `--locale document`: take the locale from the document's language.
+    pub locale_from_document: bool,
     pub dialect: Option<Ns>,
+    pub search_mode: Option<SearchMode>,
+    pub case_sensitive: Option<bool>,
+    pub whole_cell: Option<bool>,
     pub now: Option<f64>,
     pub rand_seed: Option<u64>,
 }
@@ -49,6 +54,15 @@ impl Program {
         if let Some(l) = &o.locale {
             opts.locale = l.clone();
         }
+        if let Some(m) = o.search_mode {
+            opts.search.mode = m;
+        }
+        if let Some(c) = o.case_sensitive {
+            opts.search.case_sensitive = c;
+        }
+        if let Some(w) = o.whole_cell {
+            opts.search.whole_cell = w;
+        }
         if let Some(d) = o.dialect {
             opts.dialect = d;
         }
@@ -58,10 +72,11 @@ impl Program {
             && (f.date_system != opts.date_system
                 || f.iteration != opts.iteration
                 || f.locale != opts.locale
-                || f.dialect != opts.dialect)
+                || f.dialect != opts.dialect
+                || f.search != opts.search)
         {
             return fail(
-                "date system, dialect, iteration and locale were fixed when the program was built \
+                "date system, dialect, search settings, iteration and locale were fixed when the program was built \
                  (constants were folded with them); rebuild with --no-fold to change them at run time",
             );
         }

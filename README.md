@@ -89,8 +89,9 @@ unknown keys are rejected.
 | ------ | --------------------- | ---------------- |
 | `--date-system 1899\|1900\|1904` | default: from the file | only with `--no-fold` builds |
 | `--dialect core\|xlsx\|ods` | default: from the file extension | only with `--no-fold` builds |
-| `--iterate[=N[,EPS]]` / `--no-iterate` | default: off (`#CIRC!`) | only with `--no-fold` builds |
-| `--locale en\|es\|de\|fr` | default: `en` | only with `--no-fold` builds |
+| `--iterate[=N[,EPS]]` / `--no-iterate` | default: what the document stores (`#CIRC!` if off) | only with `--no-fold` builds |
+| `--locale en\|es\|de\|fr\|document` | default: `en` (not the document's language, see FIDELITY.md) | only with `--no-fold` builds |
+| `--search wildcards\|regex\|literal`, `--case-sensitive`, `--whole-cell` | default: from the ODS settings (Excel behavior for XLSX) | only with `--no-fold` builds |
 | `--now SERIAL`, `--seed N` | fixes `NOW()/TODAY()` and `RAND()` | always |
 | `--no-fold` | keep every reachable formula | — |
 

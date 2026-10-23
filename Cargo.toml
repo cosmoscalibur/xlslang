@@ -24,6 +24,7 @@ load = ["dep:sheetrs"]
 [dependencies]
 serde = { version = "1.0.229", features = ["derive", "rc"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
+regex = "1"
 sheetrs = { git = "https://github.com/cosmoscalibur/sheetrs", branch = "claude/xlsx-ods-compiler-d07ic5", default-features = false, optional = true }
 
 [dev-dependencies]

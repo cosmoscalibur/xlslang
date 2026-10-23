@@ -7,10 +7,10 @@
 
 use crate::addr::CellRef;
 use crate::ir::Ns;
-use crate::model::{Model, ModelCell};
-use crate::options::DateSystem;
+use crate::model::{Model, ModelCell, ModelSettings};
+use crate::options::{DateSystem, Iteration, Search, SearchMode};
 use crate::value::{ErrorKind, Value};
-use sheetrs::reader::{CellValue, Workbook};
+use sheetrs::reader::{CellValue, DocumentSettings, Workbook};
 use std::path::Path;
 
 pub fn load(path: &Path) -> Result<Model, String> {
@@ -31,6 +31,7 @@ pub fn from_workbook(wb: &Workbook, dialect: Ns) -> Model {
         (false, Ns::Ods) => DateSystem::Real1899,
         (false, _) => DateSystem::Excel1900,
     };
+    m.settings = settings(&wb.settings, dialect, &mut m.diagnostics);
     m.names = wb
         .defined_names
         .iter()
@@ -64,6 +65,44 @@ pub fn from_workbook(wb: &Workbook, dialect: Ns) -> Model {
         }
     }
     m
+}
+
+/// Resolve the settings the document states into engine terms. ODS applies the
+/// ODF defaults to what it leaves out (case sensitive, whole-cell, regular
+/// expressions on, wildcards off); LibreOffice itself omits an attribute that
+/// equals the default. Excel files carry no search settings and use Excel's
+/// behavior.
+fn settings(s: &DocumentSettings, dialect: Ns, diags: &mut Vec<String>) -> ModelSettings {
+    let search = (dialect == Ns::Ods).then(|| Search {
+        mode: if s.use_wildcards == Some(true) {
+            SearchMode::Wildcards
+        } else if s.use_regular_expressions.unwrap_or(true) {
+            SearchMode::Regex
+        } else {
+            SearchMode::Literal
+        },
+        whole_cell: s.search_whole_cell.unwrap_or(true),
+        case_sensitive: s.case_sensitive.unwrap_or(true),
+    });
+    if s.precision_as_shown == Some(true) {
+        diags.push(
+            "the document uses 'precision as shown'; values are not rounded to their displayed precision"
+                .into(),
+        );
+    }
+    ModelSettings {
+        iteration: s
+            .iteration
+            .as_ref()
+            .filter(|i| i.enabled)
+            .map(|i| Iteration {
+                max_iterations: i.max_iterations,
+                max_change: i.max_change,
+            }),
+        search,
+        two_digit_year_start: s.null_year,
+        locale: s.locale.clone(),
+    }
 }
 
 fn convert(v: &CellValue) -> Value {

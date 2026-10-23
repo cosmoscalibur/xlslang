@@ -97,6 +97,8 @@ fn spec_from(args: &mut Args) -> Result<(Spec, xlslang::Overrides), Fail> {
         dialect: o.dialect,
         iteration: o.iteration.flatten(),
         locale: o.locale.clone(),
+        locale_from_document: o.locale_from_document,
+        search: search_from(&o),
         now: o.now,
         rand_seed: o.rand_seed,
         fold,
@@ -210,6 +212,8 @@ fn calc(mut args: Args) -> Result<i32, Fail> {
         dialect: o.dialect,
         iteration: o.iteration.flatten(),
         locale: o.locale.clone(),
+        locale_from_document: o.locale_from_document,
+        search: search_from(&o),
         now: o.now,
         rand_seed: o.rand_seed,
         ..Spec::default()
@@ -264,4 +268,17 @@ fn inspect(args: Args) -> Result<i32, Fail> {
         println!("diagnostic: {d}");
     }
     Ok(0)
+}
+
+/// Search settings forced on the command line; unset parts come from the file.
+fn search_from(o: &xlslang::Overrides) -> Option<xlslang::options::Search> {
+    (o.search_mode.is_some() || o.case_sensitive.is_some() || o.whole_cell.is_some()).then(|| {
+        xlslang::options::Search {
+            mode: o
+                .search_mode
+                .unwrap_or(xlslang::options::SearchMode::Wildcards),
+            whole_cell: o.whole_cell.unwrap_or(true),
+            case_sensitive: o.case_sensitive.unwrap_or(false),
+        }
+    })
 }

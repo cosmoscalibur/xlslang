@@ -38,6 +38,48 @@ are the part to re-verify against real Excel files when available.
 | 10 | `DATE(29,1,1)`, two-digit years | 1929 (1900 + year) | 2029 (0–29 → 20xx, 30–99 → 19xx) | LibreOffice's two-digit-year window. |
 | 11 | `1904` documents | `date1904` flag in the workbook | `table:null-date` = 1904-01-01 | Same calendar, different carrier; both map to date system `1904`. |
 | 12 | `TEXT(x, "")` | `""` | `""` | Identical, listed because the engine used to return the number. |
+| 13 | 14 | Text that looks like a date: `DATEVALUE("1 Mar 2024")`, `DATEVALUE("2024/03/01")` | accepted | `#VALUE!` | LibreOffice 24.2 (en-US) accepts `1-Mar-2024`, `Mar 1, 2024`, `3/1/2024`, ISO; it rejects day-month-name with spaces and year-first with slashes (`DatePatterns::Libre`). |
+| 15 
+## Document settings (stored in the file)
+
+Read by `sheetrs` as stored (`Workbook::settings`, `None` = not stated) and
+resolved into engine options by the loader:
+
+| Setting | XLSX | ODS | Engine |
+| ------- | ---- | --- | ------ |
+| Iterative calculation | `calcPr iterate/iterateCount/iterateDelta` | `table:iteration status/steps/maximum-difference` | `iteration`, applied when the document switches it on; `--iterate`/`--no-iterate` override. |
+| Search criteria: wildcards / regular expressions / literal | — (Excel: wildcards) | `table:use-wildcards`, `table:use-regular-expressions` | `search.mode`. ODF defaults for what the file omits: regular expressions **on**, wildcards off (LibreOffice omits an attribute equal to the default; verified by saving a document with regex on). Wildcards win when both are on. |
+| Whole-cell matching | — (Excel: whole cell) | `table:search-criteria-must-apply-to-whole-cell` (default true) | `search.whole_cell`. |
+| Case sensitivity | — (Excel: insensitive) | `table:case-sensitive` (default true) | `search.case_sensitive`, **comparison operators only**: with it on, `"a"="A"` is false and `"abc"<"ABD"` is true (letters first, case as tie-break, lowercase first). `COUNTIF`, `MATCH`, `VLOOKUP`, `SEARCH` stay case-insensitive: LibreOffice returns 3 for `COUNTIF(r,"APPLE")` over `apple` cells with the setting on. |
+| Two-digit-year window | — | `table:null-year` | `Locale::two_digit_year_start` (default 1930): text dates and LibreOffice `DATE(yy,…)`. |
+| Precision as shown | `fullPrecision="0"` | `table:precision-as-shown` | Not applied; the loader adds a diagnostic. |
+| Document language | — | default cell style `fo:language`/`fo:country` | Read, **not** used by default (see below). |
+
+Regular-expression behavior reproduced from LibreOffice: criteria are
+anchored when whole-cell matching is on; an **empty match is not a hit**
+(`COUNTIF(r,"a*")` counts 6 of 8 text cells, those containing an `a`, not 8;
+`SEARCH("a*","xabc")` is 2). The expressions use Rust's `regex` syntax, close to
+ICU's for common patterns; look-around and back-references are not supported.
+
+Excel files carry none of the search settings, so XLSX uses Excel's behavior
+(wildcards, whole cell, case-insensitive).
+
+### Locale and text conversion
+
+Which spelling of a text date or number is valid depends on the user's regional
+settings, **not** on the file: LibreOffice, given a document whose default cell
+style says `es-ES`, still reads `"3/1/2024"` as March 1st on an en-US system
+(verified: recalculating a probe document with its language switched to
+`es-ES`). So the engine defaults to `en` and does not take the document's
+language; `--locale es|de|fr|en` selects the locale explicitly and
+`--locale document` uses the document's language when the author's regional
+settings are known to match it.
+
+A locale fixes the date order of numeric text dates (`3/1/2024` is March 1st
+under `en`, January 3rd under `es`/`de`/`fr`; a four-digit first component is
+always year-first), month names (the locale's and English), decimal and group
+separators, boolean names and `TEXT` day/month names. Times (`13:30`,
+`1:30 PM`) and date-times parse in every locale.
 
 ## Cached values read from the files (reader fidelity)
 
@@ -55,6 +97,7 @@ Fidelity also depends on reading what the file stores, not on a convention:
   all become `Err:502`/`#VALUE!`; Excel says `#NUM!`). The engine always
   computes Excel's kind; when comparing with LibreOffice caches only "is an
   error" is checked for those cases.
+* **Document settings.** `sheetrs` now exposes the calculation settings above (`DocumentSettings`).
 * **Typed cached strings.** XLSX formula results typed `str` that look numeric
   (`"005"`) are read by `sheetrs` as numbers, and a cached `#VALUE!` of a formula
   that contains `:` is read as no value (`sheetrs` issue #62). The oracle avoids
@@ -64,16 +107,18 @@ Fidelity also depends on reading what the file stores, not on a convention:
 
 | Case | Status |
 | ---- | ------ |
-| Regular expressions / wildcards in `COUNTIF`, `SEARCH`, `MATCH`, … | ODS documents carry a setting (`table:use-regular-expressions`, `table:use-wildcards`); files converted from XLSX use wildcards, which is what the engine implements. A native ODS with regular expressions on would differ. The setting is not exposed by `sheetrs`. |
-| `UPPER("ß")` | LibreOffice `ẞ`, engine `SS` (Rust Unicode mapping). |
-| `CHAR(160)` and other code-page characters | LibreOffice yields U+FFFD for the 128–255 range. |
-| `DATEDIF(…,"MD")` | Not implemented (LibreOffice itself returns `-1` for a case Excel computes). |
-| `DATEVALUE("3/1/2024")` and other locale-bound text dates | Only ISO dates parse. |
-| `COUNTIF`-style criteria, `MATCH` ordering with booleans | Excel ordering in every dialect. |
-| Iterative-calculation defaults per application | Excel 100/0.001; LibreOffice defaults differ and are file settings; pass `--iterate`. |
+| `CHAR(160)` and other code-page characters | LibreOffice yields U+FFFD for the 128–255 range; the engine returns the Unicode character. |
+| Regular expressions beyond Rust `regex` syntax (look-around, back-references) | LibreOffice uses ICU; such patterns match nothing in the engine. |
+| Ordering of booleans in `MATCH`/sorted lookups | Excel ordering in every dialect. |
+| Text dates in locales other than the four built in, other date spellings per locale (`d.M.yy` variants, localized month abbreviations with dots) | Not covered; use ISO or a supported pattern. |
+| Excel's own `DATEDIF(…,"MD")` result | Pinned to the LibreOffice-verified formula; not checked against Excel. |
 | Excel-only dynamic arrays (`FILTER`, `SORT`, spill) and `LET`/`LAMBDA` | Not implemented. |
+| `table:precision-as-shown` / `fullPrecision="0"` | Not applied (diagnostic emitted). |
 
 Adding a case: put the formula in `scripts/probe_dialect.py`, regenerate,
 decide whether it is modeled (add the behavior, pin the Excel side in
 `excel_dialect_differs_where_documented`) or a gap (add it to `NOT_REPRODUCED`
-with the reason, and to the table above).
+with the reason, and to the table above). Settings scenarios (regex,
+case-sensitive, literal, iteration) are produced by rewriting the ODS
+calculation settings and dropping the cached values so LibreOffice recalculates
+(`scripts/probe_dialect.py`).

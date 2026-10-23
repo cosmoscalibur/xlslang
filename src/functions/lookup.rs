@@ -1,9 +1,11 @@
 //! Lookup and reference functions.
 
-use super::stats::{values_equal, wildcard};
+use super::stats::values_equal;
 use super::{Reg, num, opt, opt_num};
 use crate::addr::{self, MAX_COLS, MAX_ROWS, Rect};
 use crate::engine::{Engine, Res};
+use crate::matching::Matcher;
+use crate::options::Search;
 use crate::value::{Array, ErrorKind, Value, compare};
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -13,7 +15,8 @@ pub(super) fn register(r: &mut Reg) {
         let needle = e.scalar(a[0].clone());
         let hay = e.array_of(a[1].clone());
         let kind = opt_num(e, a, 2, 1.0)?;
-        position(&needle, &hay.data, kind).map_or(Err(ErrorKind::Na), |p| num((p + 1) as f64))
+        position(&needle, &hay.data, kind, &e.opts.search)
+            .map_or(Err(ErrorKind::Na), |p| num((p + 1) as f64))
     })
     .array_args();
     r.eager("INDEX", 2, 4, index).array_args();
@@ -58,14 +61,13 @@ pub(super) fn register(r: &mut Reg) {
 
 /// Position (0-based) of `needle` in `hay` for a MATCH `kind` (0 exact,
 /// 1 largest ≤ in ascending data, -1 smallest ≥ in descending data).
-fn position(needle: &Value, hay: &[Value], kind: f64) -> Option<usize> {
+fn position(needle: &Value, hay: &[Value], kind: f64, search: &Search) -> Option<usize> {
     if kind == 0.0 {
-        if let Value::Text(p) = needle
-            && p.contains(['*', '?', '~'])
-        {
+        if let Value::Text(p) = needle {
+            let m = Matcher::new(p, search, search.whole_cell);
             return hay
                 .iter()
-                .position(|v| matches!(v, Value::Text(t) if wildcard(p, t)));
+                .position(|v| matches!(v, Value::Text(t) if m.is_match(t)));
         }
         return hay.iter().position(|v| values_equal(needle, v));
     }
@@ -82,7 +84,7 @@ fn position(needle: &Value, hay: &[Value], kind: f64) -> Option<usize> {
         if !same_class(v) {
             continue;
         }
-        let ord = compare(v, needle);
+        let ord = compare(v, needle, false);
         let ok = if kind > 0.0 {
             ord != Ordering::Greater
         } else {
@@ -180,7 +182,13 @@ fn table_lookup(e: &mut Engine, a: &[Value], horizontal: bool) -> Res<Value> {
         }
     };
     let keys: Vec<Value> = (0..lanes).map(key).collect();
-    let pos = position(&needle, &keys, if approx { 1.0 } else { 0.0 }).ok_or(ErrorKind::Na)? as u32;
+    let pos = position(
+        &needle,
+        &keys,
+        if approx { 1.0 } else { 0.0 },
+        &e.opts.search,
+    )
+    .ok_or(ErrorKind::Na)? as u32;
     let k = idx as u32 - 1;
     Ok(if horizontal {
         t.get(k, pos).clone()
@@ -205,10 +213,19 @@ fn xlookup(e: &mut Engine, a: &[Value]) -> Res<Value> {
             .copied()
             .find(|&i| values_equal(&needle, &hay.data[i])),
         2 => match &needle {
-            Value::Text(p) => order
-                .iter()
-                .copied()
-                .find(|&i| matches!(&hay.data[i], Value::Text(t) if wildcard(p, t))),
+            Value::Text(p) => {
+                // The explicit wildcard mode of XLOOKUP, whatever the document says.
+                let search = Search {
+                    mode: crate::options::SearchMode::Wildcards,
+                    whole_cell: true,
+                    ..e.opts.search
+                };
+                let wild = Matcher::new(p, &search, true);
+                order
+                    .iter()
+                    .copied()
+                    .find(|&i| matches!(&hay.data[i], Value::Text(t) if wild.is_match(t)))
+            }
             _ => order
                 .iter()
                 .copied()
@@ -225,14 +242,14 @@ fn xlookup(e: &mut Engine, a: &[Value]) -> Res<Value> {
                 ) {
                     continue;
                 }
-                match compare(&v, &needle) {
+                match compare(&v, &needle, false) {
                     Ordering::Equal => {
                         best = Some(i);
                         break;
                     }
                     o if (m == -1 && o == Ordering::Less) || (m == 1 && o == Ordering::Greater) => {
                         let better = best.is_none_or(|b| {
-                            let ob = compare(&v, &hay.data[b]);
+                            let ob = compare(&v, &hay.data[b], false);
                             if m == -1 {
                                 ob == Ordering::Greater
                             } else {

@@ -18,7 +18,7 @@ use crate::formula::{self, ParseCtx};
 use crate::graph::{self, Csr};
 use crate::ir::{Binding, CellDef, CellKind, Expr, Ns, PROGRAM_VERSION, Program};
 use crate::model::Model;
-use crate::options::{DateSystem, EngineOptions, Iteration, Locale};
+use crate::options::{DatePatterns, DateSystem, EngineOptions, Iteration, Locale, Search};
 use crate::value::{ErrorKind, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -50,6 +50,9 @@ pub struct Spec {
     pub dialect: Option<Ns>,
     pub iteration: Option<Iteration>,
     pub locale: Option<Locale>,
+    /// Use the document's language as locale when `locale` is not given.
+    pub locale_from_document: bool,
+    pub search: Option<Search>,
     pub now: Option<f64>,
     pub rand_seed: Option<u64>,
     /// Evaluate input-independent cells at build time.
@@ -65,6 +68,8 @@ impl Default for Spec {
             dialect: None,
             iteration: None,
             locale: None,
+            locale_from_document: false,
+            search: None,
             now: None,
             rand_seed: None,
             fold: true,
@@ -347,11 +352,36 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
         comp_cyclic.push(graph::is_cycle(&csr, comp));
     }
 
+    // Precedence: explicit option > what the document states > default.
+    // The document's language does not decide how text converts to numbers or
+    // dates: Excel and LibreOffice use the user's regional settings, which a file
+    // does not carry. So `en` is the default and the document language is used
+    // only on request (`locale_from_document`).
+    let mut locale = match (&spec.locale, spec.locale_from_document) {
+        (Some(l), _) => l.clone(),
+        (None, true) => model
+            .settings
+            .locale
+            .as_deref()
+            .and_then(Locale::by_tag)
+            .unwrap_or_default(),
+        (None, false) => Locale::default(),
+    };
+    locale.date_patterns = if spec.dialect.unwrap_or(model.dialect) == Ns::Ods {
+        DatePatterns::Libre
+    } else {
+        DatePatterns::Excel
+    };
+    // The two-digit-year window, in contrast, is stored in the document.
+    if let Some(y) = model.settings.two_digit_year_start {
+        locale.two_digit_year_start = y;
+    }
     let opts = EngineOptions {
         date_system: spec.date_system.unwrap_or(model.date_system),
-        iteration: spec.iteration,
-        locale: spec.locale.clone().unwrap_or_default(),
+        iteration: spec.iteration.or(model.settings.iteration),
+        locale,
         dialect: spec.dialect.unwrap_or(model.dialect),
+        search: spec.search.or(model.settings.search).unwrap_or_default(),
         now: spec.now,
         rand_seed: spec.rand_seed,
     };

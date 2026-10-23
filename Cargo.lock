@@ -406,7 +406,7 @@ dependencies = [
 [[package]]
 name = "sheetrs"
 version = "0.3.2"
-source = "git+https://github.com/cosmoscalibur/sheetrs?branch=claude%2Fxlsx-ods-compiler-d07ic5#c17b6760b6fe6791385e96a7ed1b6e7125f256c8"
+source = "git+https://github.com/cosmoscalibur/sheetrs?branch=claude%2Fxlsx-ods-compiler-d07ic5#7822a3a3f73d7a683dc1669a6505574360b222b1"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -645,6 +645,7 @@ checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 name = "xlslang"
 version = "0.2.0"
 dependencies = [
+ "regex",
  "serde",
  "serde_json",
  "sheetrs",

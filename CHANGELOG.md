@@ -18,4 +18,6 @@ Complete rewrite around a format-independent IR and a calculation engine; the
 - LibreOffice oracle tests for both formats and dialect probes (`docs/FIDELITY.md`).
 - Dialects (`xlsx`/`ods`, from the file extension) for operator and coercion
   differences; date system `1899` (real calendar, ODS default).
+- Document settings applied: iteration (XLSX/ODS), ODS search mode (regex/wildcards/literal), whole-cell and case sensitivity, two-digit-year window; `--search`, `--case-sensitive`, `--whole-cell`, `--locale document`.
+- Text dates parsed by locale (numeric order, month names, times); `DATEDIF` `MD`/`YD`; per-character case mapping (`UPPER("ß")`).
 - Inputs and outputs are plain range lists; JSON keys are canonical range text.

@@ -511,7 +511,7 @@ impl<'p> Engine<'p> {
                 (Err(e), _) | (_, Err(e)) => Value::Error(e),
             },
             BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                let ord = compare(&as_num(a), &as_num(b));
+                let ord = compare(&as_num(a), &as_num(b), self.opts.search.case_sensitive);
                 Value::Bool(match op {
                     BinOp::Eq => ord == Ordering::Equal,
                     BinOp::Ne => ord != Ordering::Equal,

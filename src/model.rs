@@ -4,7 +4,7 @@
 
 use crate::addr::{self, CellRef};
 use crate::ir::Ns;
-use crate::options::DateSystem;
+use crate::options::{DateSystem, Iteration, Search};
 use crate::value::Value;
 use std::collections::HashMap;
 
@@ -18,6 +18,18 @@ pub struct ModelCell {
     pub array: bool,
 }
 
+/// Calculation settings stored in the document, resolved into engine terms.
+/// `None`: not stated, the engine default applies.
+#[derive(Debug, Clone, Default)]
+pub struct ModelSettings {
+    /// Iterative calculation, when the document switches it on.
+    pub iteration: Option<Iteration>,
+    pub search: Option<Search>,
+    pub two_digit_year_start: Option<u16>,
+    /// Document language tag (`es-CO`).
+    pub locale: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct Model {
     pub sheets: Vec<String>,
@@ -27,6 +39,7 @@ pub struct Model {
     pub date_system: DateSystem,
     /// Namespace tried first when resolving function names.
     pub dialect: Ns,
+    pub settings: ModelSettings,
     pub diagnostics: Vec<String>,
 }
 
@@ -43,6 +56,7 @@ impl Model {
                 DateSystem::Excel1900
             },
             dialect,
+            settings: ModelSettings::default(),
             diagnostics: Vec::new(),
         }
     }
