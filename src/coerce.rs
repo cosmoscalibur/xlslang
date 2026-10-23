@@ -7,8 +7,10 @@ use crate::value::{ErrorKind, Value};
 type Res<T> = Result<T, ErrorKind>;
 
 /// Number → text as the `General` format would show it: 15 significant
-/// digits, positional between 1e-7 and 1e15, scientific otherwise.
-pub fn fmt_number(x: f64, loc: &Locale) -> String {
+/// digits, positional between 1e-7 and 1e15, scientific otherwise
+/// (`E+17`). LibreOffice (`lo`) stays positional down to 1e-14 and writes
+/// the exponent with three digits (`E+017`).
+pub fn fmt_number(x: f64, loc: &Locale, lo: bool) -> String {
     if x == 0.0 {
         return "0".into();
     }
@@ -22,7 +24,12 @@ pub fn fmt_number(x: f64, loc: &Locale) -> String {
     if x < 0.0 {
         out.push('-');
     }
-    if (-7..15).contains(&exp) {
+    let positional = if lo {
+        (-14..=15).contains(&exp)
+    } else {
+        (-7..15).contains(&exp)
+    };
+    if positional {
         if exp >= 0 {
             let int_len = exp as usize + 1;
             if digits.len() <= int_len {
@@ -45,8 +52,9 @@ pub fn fmt_number(x: f64, loc: &Locale) -> String {
             out.push(loc.decimal);
             out.push_str(&digits[1..]);
         }
+        let width = if lo { 3 } else { 2 };
         out.push_str(&format!(
-            "E{}{:02}",
+            "E{}{:0width$}",
             if exp < 0 { '-' } else { '+' },
             exp.abs()
         ));
@@ -116,10 +124,13 @@ pub fn to_num(v: &Value, loc: &Locale, sys: DateSystem) -> Res<f64> {
     }
 }
 
-pub fn to_text(v: &Value, loc: &Locale) -> Res<String> {
+/// `lo`: LibreOffice conventions (booleans are the numbers 1/0 and numbers use
+/// its general format).
+pub fn to_text(v: &Value, loc: &Locale, lo: bool) -> Res<String> {
     match v {
         Value::Text(s) => Ok(s.to_string()),
-        Value::Number(n) => Ok(fmt_number(*n, loc)),
+        Value::Number(n) => Ok(fmt_number(*n, loc, lo)),
+        Value::Bool(b) if lo => Ok(if *b { "1" } else { "0" }.into()),
         Value::Bool(b) => Ok(if *b { &loc.true_text } else { &loc.false_text }.clone()),
         Value::Empty => Ok(String::new()),
         Value::Error(e) => Err(*e),
@@ -153,14 +164,19 @@ mod tests {
     #[test]
     fn general_format() {
         let en = Locale::en_us();
-        assert_eq!(fmt_number(0.1 + 0.2, &en), "0.3");
-        assert_eq!(fmt_number(1234.5, &en), "1234.5");
-        assert_eq!(fmt_number(-42.0, &en), "-42");
-        assert_eq!(fmt_number(1e20, &en), "1E+20");
-        assert_eq!(fmt_number(1.5e-10, &en), "1.5E-10");
-        assert_eq!(fmt_number(0.00012, &en), "0.00012");
-        assert_eq!(fmt_number(1.5, &Locale::es_es()), "1,5");
-        assert_eq!(fmt_number(100.0, &en), "100");
+        assert_eq!(fmt_number(0.1 + 0.2, &en, false), "0.3");
+        assert_eq!(fmt_number(1234.5, &en, false), "1234.5");
+        assert_eq!(fmt_number(-42.0, &en, false), "-42");
+        assert_eq!(fmt_number(1e20, &en, false), "1E+20");
+        assert_eq!(fmt_number(1.5e-10, &en, false), "1.5E-10");
+        assert_eq!(fmt_number(0.00012, &en, false), "0.00012");
+        assert_eq!(fmt_number(1.5, &Locale::es_es(), false), "1,5");
+        assert_eq!(fmt_number(100.0, &en, false), "100");
+        // LibreOffice: wider positional range, three-digit exponent.
+        assert_eq!(fmt_number(1e-10, &en, true), "0.0000000001");
+        assert_eq!(fmt_number(1e-15, &en, true), "1E-015");
+        assert_eq!(fmt_number(1e20, &en, true), "1E+020");
+        assert_eq!(fmt_number(1e16, &en, false), "1E+16");
     }
 
     #[test]

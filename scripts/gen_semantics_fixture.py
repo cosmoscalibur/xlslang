@@ -92,22 +92,6 @@ FORMULAS = [
 ]
 
 
-# Formulas returning dates/times are compared through TEXT(): LibreOffice
-# stores such results as typed date cells whose serial number the sheetrs ODS
-# reader derives from the calendar date (without the 1900 leap-year quirk,
-# so it is one less than the spreadsheet serial from 1900-03-01 on).
-def as_text(f):
-    fmt = "0.0000" if f.startswith("TIME(") else "0"
-    return f'"["&TEXT({f},"{fmt}")&"]"'
-
-
-FORMULAS = [as_text(f) if f.startswith(("DATE(", "EDATE(", "EOMONTH(", "DATEVALUE(", "TIME(")) else f for f in FORMULAS]
-
-
-def serial(d):
-    return (d - date(1899, 12, 30)).days
-
-
 def build(path):
     wb = openpyxl.Workbook()
     data = wb.active
@@ -119,7 +103,7 @@ def build(path):
         data[f"B{i}"] = t
     base = date(2024, 1, 15)
     for i in range(8):
-        data[f"C{i + 1}"] = serial(date(2024, 1 + i, 15 + i))  # plain numbers: see as_text
+        data[f"C{i + 1}"] = date(2024, 1 + i, 15 + i)
     data["E1"], data["F1"], data["G1"] = "x", "y", "z"
     data["E2"], data["F2"], data["G2"] = 10, 20, 30
     for i, v in enumerate([1, 3, 5, 7, 9], start=1):

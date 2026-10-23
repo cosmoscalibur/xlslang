@@ -18,11 +18,16 @@ loan.ods  ──┘  (format independent)          └─ Program::execute() (li
   build time (topological order, cycles isolated). `INDIRECT`, `OFFSET` and
   similar functions resolve their targets lazily at run time, on the same
   engine.
-* **Execution is configurable:** 1900/1904 date system, iterative calculation
+* **Faithful to the source application.** Behavior that differs between Excel
+  and LibreOffice (booleans as numbers, `0^0`, 1900 leap-year quirk, number
+  formatting…) follows the file's dialect; every case is listed and tested in
+  [docs/FIDELITY.md](docs/FIDELITY.md).
+* **Execution is configurable:** 1899/1900/1904 date system, iterative calculation
   (iterations and tolerance) and locale (separators, month/day names, boolean
   names).
 
-Architecture, decisions and benchmarks: [docs/DESIGN.md](docs/DESIGN.md).
+Architecture and decisions: [docs/DESIGN.md](docs/DESIGN.md). Differences between
+Excel and LibreOffice: [docs/FIDELITY.md](docs/FIDELITY.md).
 
 ## Quick start
 
@@ -31,15 +36,15 @@ Requires Rust ≥ 1.99 (`rust-toolchain.toml` pins it).
 ```bash
 cargo build --release          # target/release/{xlslang, xlslang-rt}
 
-# Compile a model: choose what goes in and what comes out.
+# Compile a model: declare which ranges are inputs and which are outputs.
 xlslang build tests/assets/loan.xlsx \
-    --in principal=Loan!B1 --in rate=Loan!B2 --in years=Loan!B3 \
-    --out payment=Loan!B4 --out interest=Loan!B6 \
+    --in Loan!B1 --in Loan!B2 --in Loan!B3 \
+    --out Loan!B4 --out Loan!B6 \
     -o loan
 # cells: 1464 total, 4 reachable, 4 kept | formulas: 1086 total, 0 folded, 1 kept ...
 
-echo '{"principal": 250000, "rate": 0.045, "years": 15}' | ./loan
-# {"payment":1912.4832220336577,"interest":94246.9799660584}
+echo '{"Loan!B1": 250000, "Loan!B2": 0.045, "Loan!B3": 15}' | ./loan
+# {"Loan!B4":1912.4832220336577,"Loan!B6":94246.9799660584}
 
 ./loan --info                  # declared inputs/outputs, shapes, diagnostics
 ./loan --serve                 # one JSON object per line in, one per line out
@@ -48,7 +53,7 @@ echo '{"principal": 250000, "rate": 0.045, "years": 15}' | ./loan
 The same works from `.ods`, and without producing a file:
 
 ```bash
-xlslang run tests/assets/loan.ods --in principal=Loan!B1 --out payment=Loan!B4 <<< '{"principal": 1000}'
+xlslang run tests/assets/loan.ods --in Loan!B1 --out Loan!B4 <<< '{"Loan!B1": 1000}'
 xlslang calc '=TEXT(1234.5,"#,##0.00")' --locale es          # "1.234,50"
 xlslang inspect model.xlsx      # sizes, unsupported functions, cycles, run-time refs
 ```
@@ -62,30 +67,34 @@ xlslang inspect model.xlsx      # sizes, unsupported functions, cycles, run-time
 | `calc "=FORMULA"` | Evaluate a single formula. |
 | `inspect FILE` | Report what the compiler sees. |
 
-### Binding inputs and outputs (`--in`, `--out`)
+### Inputs and outputs (`--in`, `--out`)
 
-`[NAME=]TARGET`, where `TARGET` is `Sheet1!A1`, `'My Sheet'!B2:C9`, an
-unqualified address (first sheet) or a defined name. `NAME` is the JSON key
-(default: the target text). Without any `--out`, every sheet's formula range is
-an output.
+Each is a list of cells and ranges: `Sheet1!A1`, `'My Sheet'!B2:C9`, an
+unqualified address (first sheet) or a defined name (resolved to its range).
+That is all the engine knows: JSON keys are the **canonical range text**
+(`Sheet1!B2:C9`, sheet quoted when needed). Friendly names, schemas and
+documentation are a layer above the engine. Without any `--out`, every sheet's
+formula range is an output.
 
 JSON mapping: a single cell is a scalar, a range is an array of rows (a flat
 array is accepted for one-row/one-column ranges). Numbers, strings, booleans and
 `null` (blank) map to themselves; an error is `{"error": "#DIV/0!"}` (also
-accepted on input). Dates are spreadsheet serial numbers. An input left out of
-the JSON keeps the value stored in the file; unknown keys are rejected.
+accepted on input). Dates are spreadsheet serial numbers of the file's date
+system. An input left out of the JSON keeps the value stored in the file;
+unknown keys are rejected.
 
 ### Execution options
 
 | Option | Build (`build`/`run`) | Run (executable) |
 | ------ | --------------------- | ---------------- |
-| `--date-system 1900\|1904` | default: from the file | only with `--no-fold` builds |
+| `--date-system 1899\|1900\|1904` | default: from the file | only with `--no-fold` builds |
+| `--dialect core\|xlsx\|ods` | default: from the file extension | only with `--no-fold` builds |
 | `--iterate[=N[,EPS]]` / `--no-iterate` | default: off (`#CIRC!`) | only with `--no-fold` builds |
 | `--locale en\|es\|de\|fr` | default: `en` | only with `--no-fold` builds |
 | `--now SERIAL`, `--seed N` | fixes `NOW()/TODAY()` and `RAND()` | always |
 | `--no-fold` | keep every reachable formula | — |
 
-Build-time folding consumes the date system, iteration settings and locale, so
+Build-time folding consumes the date system, dialect, iteration settings and locale, so
 overriding them on a folded program is refused with an explanation instead of
 silently mixing configurations.
 
@@ -111,8 +120,8 @@ values LibreOffice cached (see `scripts/gen_semantics_fixture.py`).
 See [docs/DESIGN.md](docs/DESIGN.md#known-limitations) for the full list. The
 ones that matter first: no external-workbook references (cached values are
 kept), no dynamic-array spilling (array results take their top-left value),
-no `LET`/`LAMBDA`, run-time `INDIRECT`/`OFFSET` keep the whole workbook
-reachable, and ODS date cells carry the serial the `sheetrs` reader derives.
+no `LET`/`LAMBDA`, and run-time `INDIRECT`/`OFFSET` keep the whole workbook
+reachable.
 
 ## Roadmap
 
@@ -135,10 +144,11 @@ cargo test                      # unit, integration, LibreOffice oracle, CLI
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 cargo run --release --example stress        # scale check
-cargo run --release --example graph_bench   # petgraph/ultragraph comparison
 ```
 
-`sheetrs` (the XLSX/ODS readers) is used as a git dependency. Cargo features:
+`sheetrs` (the XLSX/ODS readers) is used as a git dependency (currently its
+`claude/xlsx-ods-compiler-d07ic5` branch, which carries the ODS date fix; switch
+to `develop` once merged). Cargo features:
 `load` (default) enables the file frontend and the `xlslang` binary; without it
 the crate is the engine only (`xlslang-rt` is the runtime stub embedded into
 compiled executables).

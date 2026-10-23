@@ -88,9 +88,9 @@ fn ranges_and_aggregates() {
         ("C11", json!("=COUNTIF(B1:B4,\"?\")")),
         ("C12", json!("=COUNTBLANK(A1:A6)")),
     ]);
-    let (p, _) = build(&m, &spec(&[], &["c=C1:C12"]));
+    let (p, _) = build(&m, &spec(&[], &["C1:C12"]));
     let out = p.execute(&Json::Null, &Default::default()).unwrap();
-    let col: Vec<Json> = out["c"]
+    let col: Vec<Json> = out["Sheet1!C1:C12"]
         .as_array()
         .unwrap()
         .iter()
@@ -133,9 +133,9 @@ fn lookups() {
         ("D7", json!("=SUM(INDEX(B1:B3,0))")),
         ("D8", json!("=ROWS(A1:B3)*COLUMNS(A1:B3)")),
     ]);
-    let (p, _) = build(&m, &spec(&[], &["d=D1:D8"]));
+    let (p, _) = build(&m, &spec(&[], &["D1:D8"]));
     let out = p.execute(&Json::Null, &Default::default()).unwrap();
-    let col: Vec<Json> = out["d"]
+    let col: Vec<Json> = out["Sheet1!D1:D8"]
         .as_array()
         .unwrap()
         .iter()
@@ -177,14 +177,14 @@ fn dates_and_date_systems() {
     );
     assert_eq!(calc("DATE(1900,3,1)-DATE(1900,2,28)"), json!(2)); // the 1900-02-29 quirk
 
-    let mut s = spec(&[], &["r=A1"]);
+    let mut s = spec(&[], &["A1"]);
     s.date_system = Some(xlslang::options::DateSystem::Excel1904);
     let mut m = xlslang::Model::new(xlslang::ir::Ns::Xlsx);
     let sh = m.add_sheet("Sheet1");
     m.set_formula(sh, "A1", "DATE(2024,1,1)");
     let (p, _) = build(&m, &s);
     assert_eq!(
-        p.execute(&Json::Null, &Default::default()).unwrap()["r"],
+        p.execute(&Json::Null, &Default::default()).unwrap()["Sheet1!A1"],
         json!(43830)
     );
 }
@@ -209,7 +209,7 @@ fn namespaces_split_dialect_specific_functions() {
         &m,
         &xlslang::Spec {
             fold: false,
-            ..spec(&[], &["o=B1"])
+            ..spec(&[], &["B1"])
         },
     );
     let json = serde_json::to_string(&p).unwrap();
@@ -222,10 +222,10 @@ fn namespaces_split_dialect_specific_functions() {
 #[test]
 fn unsupported_functions_are_reported() {
     let m = sheet(&[("A1", json!("=NOSUCHFN(1)+1"))]);
-    let (p, r) = build(&m, &spec(&[], &["o=A1"]));
+    let (p, r) = build(&m, &spec(&[], &["A1"]));
     assert!(r.unsupported.contains("NOSUCHFN"));
     assert_eq!(
-        p.execute(&Json::Null, &Default::default()).unwrap()["o"],
+        p.execute(&Json::Null, &Default::default()).unwrap()["Sheet1!A1"],
         err("#NAME?")
     );
     assert!(

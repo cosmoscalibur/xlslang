@@ -16,32 +16,25 @@ use crate::addr::{self, CellRef, Rect};
 use crate::engine::Engine;
 use crate::formula::{self, ParseCtx};
 use crate::graph::{self, Csr};
-use crate::ir::{Binding, CellDef, CellKind, Expr, PROGRAM_VERSION, Program};
+use crate::ir::{Binding, CellDef, CellKind, Expr, Ns, PROGRAM_VERSION, Program};
 use crate::model::Model;
 use crate::options::{DateSystem, EngineOptions, Iteration, Locale};
 use crate::value::{ErrorKind, Value};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
+/// A cell or range declared as input or output. The engine knows nothing
+/// else about it: JSON keys are the canonical range text (`Sheet1!B2:C9`), and
+/// naming them is the job of a layer above.
 #[derive(Debug, Clone)]
 pub struct BindingSpec {
-    /// JSON key; defaults to the target text.
-    pub name: Option<String>,
     /// `Sheet1!A1`, `Sheet1!A1:B3`, `A1` (first sheet) or a defined name.
     pub target: String,
 }
 
 impl BindingSpec {
-    /// Parse `name=target` or just `target`.
     pub fn parse(s: &str) -> Self {
-        match s.split_once('=') {
-            Some((n, t)) if !n.contains(['!', ':']) => Self {
-                name: Some(n.to_string()),
-                target: t.to_string(),
-            },
-            _ => Self {
-                name: None,
-                target: s.to_string(),
-            },
+        Self {
+            target: s.trim().to_string(),
         }
     }
 }
@@ -53,6 +46,8 @@ pub struct Spec {
     pub outputs: Vec<BindingSpec>,
     /// Defaults to the date system of the source workbook.
     pub date_system: Option<DateSystem>,
+    /// Defaults to the dialect of the source file (from its extension).
+    pub dialect: Option<Ns>,
     pub iteration: Option<Iteration>,
     pub locale: Option<Locale>,
     pub now: Option<f64>,
@@ -67,6 +62,7 @@ impl Default for Spec {
             inputs: Vec::new(),
             outputs: Vec::new(),
             date_system: None,
+            dialect: None,
             iteration: None,
             locale: None,
             now: None,
@@ -216,7 +212,7 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
         if rect.area() > MAX_BINDING_CELLS {
             return err(format!("input `{}` spans too many cells", b.target));
         }
-        let name = b.name.clone().unwrap_or_else(|| b.target.clone());
+        let name = addr::qualified(&model.sheets, &rect);
         for r in rect.r0..=rect.r1 {
             for c in rect.c0..=rect.c1 {
                 let at = CellRef::new(rect.sheet, r, c);
@@ -236,12 +232,12 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
             return err(format!("output `{}` spans too many cells", b.target));
         }
         outputs.push(Binding {
-            name: b.name.clone().unwrap_or_else(|| b.target.clone()),
+            name: addr::qualified(&model.sheets, &rect),
             rect,
         });
     }
     if spec.outputs.is_empty() {
-        for (s, name) in model.sheets.iter().enumerate() {
+        for s in 0..model.sheets.len() {
             let mut bb: Option<(u32, u32, u32, u32)> = None;
             for (at, k) in &nodes {
                 if at.sheet as usize == s && matches!(k, CellKind::Formula(_)) {
@@ -258,7 +254,7 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
             }
             if let Some((r0, c0, r1, c1)) = bb {
                 outputs.push(Binding {
-                    name: name.clone(),
+                    name: addr::qualified(&model.sheets, &Rect::new(s as u16, r0, c0, r1, c1)),
                     rect: Rect::new(s as u16, r0, c0, r1, c1),
                 });
             }
@@ -268,7 +264,7 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
         let mut names = HashSet::new();
         for b in list {
             if !names.insert(b.name.as_str()) {
-                return err(format!("duplicate binding name `{}`", b.name));
+                return err(format!("`{}` is declared twice", b.name));
             }
         }
     }
@@ -355,6 +351,7 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
         date_system: spec.date_system.unwrap_or(model.date_system),
         iteration: spec.iteration,
         locale: spec.locale.clone().unwrap_or_default(),
+        dialect: spec.dialect.unwrap_or(model.dialect),
         now: spec.now,
         rand_seed: spec.rand_seed,
     };

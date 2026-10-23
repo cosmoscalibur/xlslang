@@ -273,9 +273,10 @@ fn render_num(section: &str, x: f64, loc: &Locale, neg_prefix: bool) -> String {
 
 /// Format a number with an Excel-style format code. `General` (or an empty
 /// code) uses the general number format.
-pub fn format_number(x: f64, fmt: &str, loc: &Locale, sys: DateSystem) -> String {
-    if fmt.trim().is_empty() || fmt.trim().eq_ignore_ascii_case("general") {
-        return fmt_number(x, loc);
+/// `lo`: LibreOffice conventions for the `General` format.
+pub fn format_number(x: f64, fmt: &str, loc: &Locale, sys: DateSystem, lo: bool) -> String {
+    if fmt.trim().eq_ignore_ascii_case("general") {
+        return fmt_number(x, loc, lo);
     }
     let secs = sections(fmt);
     let (section, neg_prefix) = match (secs.len(), x) {
@@ -297,7 +298,7 @@ mod tests {
     use super::*;
 
     fn f(x: f64, fmt: &str) -> String {
-        format_number(x, fmt, &Locale::en_us(), DateSystem::Excel1900)
+        format_number(x, fmt, &Locale::en_us(), DateSystem::Excel1900, false)
     }
 
     #[test]
@@ -312,7 +313,13 @@ mod tests {
         assert_eq!(f(12.0, "\"EUR \"0"), "EUR 12");
         assert_eq!(f(1.5, "General"), "1.5");
         assert_eq!(
-            format_number(1234.5, "#,##0.00", &Locale::es_es(), DateSystem::Excel1900),
+            format_number(
+                1234.5,
+                "#,##0.00",
+                &Locale::es_es(),
+                DateSystem::Excel1900,
+                false
+            ),
             "1.234,50"
         );
     }
@@ -328,7 +335,8 @@ mod tests {
                 45292.0,
                 "dddd d mmmm",
                 &Locale::es_es(),
-                DateSystem::Excel1900
+                DateSystem::Excel1900,
+                false
             ),
             "lunes 1 enero"
         );

@@ -2,7 +2,7 @@
 
 use crate::addr::{CellRef, Rect};
 use crate::engine::Engine;
-use crate::ir::{Binding, Program};
+use crate::ir::{Binding, Ns, Program};
 use crate::options::{DateSystem, EngineOptions, Iteration, Locale};
 use crate::value::{ErrorKind, Value};
 use serde_json::{Map, Number, Value as Json};
@@ -30,6 +30,7 @@ pub struct Overrides {
     /// `Some(None)` disables iteration.
     pub iteration: Option<Option<Iteration>>,
     pub locale: Option<Locale>,
+    pub dialect: Option<Ns>,
     pub now: Option<f64>,
     pub rand_seed: Option<u64>,
 }
@@ -48,15 +49,19 @@ impl Program {
         if let Some(l) = &o.locale {
             opts.locale = l.clone();
         }
+        if let Some(d) = o.dialect {
+            opts.dialect = d;
+        }
         opts.now = o.now.or(opts.now);
         opts.rand_seed = o.rand_seed.or(opts.rand_seed);
         if let Some(f) = &self.folded_with
             && (f.date_system != opts.date_system
                 || f.iteration != opts.iteration
-                || f.locale != opts.locale)
+                || f.locale != opts.locale
+                || f.dialect != opts.dialect)
         {
             return fail(
-                "date system, iteration and locale were fixed when the program was built \
+                "date system, dialect, iteration and locale were fixed when the program was built \
                  (constants were folded with them); rebuild with --no-fold to change them at run time",
             );
         }

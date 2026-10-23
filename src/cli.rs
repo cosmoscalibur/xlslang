@@ -47,7 +47,10 @@ pub fn parse_date_system(s: &str) -> Result<DateSystem, String> {
     match s {
         "1900" => Ok(DateSystem::Excel1900),
         "1904" => Ok(DateSystem::Excel1904),
-        _ => Err(format!("--date-system must be 1900 or 1904, got `{s}`")),
+        "1899" => Ok(DateSystem::Real1899),
+        _ => Err(format!(
+            "--date-system must be 1899, 1900 or 1904, got `{s}`"
+        )),
     }
 }
 
@@ -91,6 +94,12 @@ pub fn parse_overrides(args: &mut Args) -> Result<Overrides, String> {
     } else if let Some(it) = parse_iteration(args)? {
         o.iteration = Some(Some(it));
     }
+    if let Some(v) = args.value("--dialect")? {
+        o.dialect = Some(
+            crate::ir::Ns::parse(&v)
+                .ok_or_else(|| format!("--dialect must be core, xlsx or ods, got `{v}`"))?,
+        );
+    }
     if let Some(v) = args.value("--locale")? {
         o.locale = Some(parse_locale(&v)?);
     }
@@ -128,7 +137,7 @@ Options:
   --serve              read one JSON object per line, answer one per line
   --pretty             indent the JSON output
   --info               describe the inputs and outputs of this program
-  --date-system 1900|1904   --iterate[=N[,EPS]] | --no-iterate
+  --date-system 1899|1900|1904   --dialect core|xlsx|ods   --iterate[=N[,EPS]] | --no-iterate
   --locale en|es|de|fr      --now SERIAL   --seed N";
 
 /// Execute a program according to command-line arguments. Returns the exit

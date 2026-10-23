@@ -3,6 +3,8 @@
 //! `scripts/gen_semantics_fixture.py`). The engine must reproduce them from the
 //! formulas alone, from both container formats.
 
+mod common;
+
 use serde_json::Value as Json;
 use std::path::Path;
 use xlslang::addr::CellRef;
@@ -62,25 +64,6 @@ const ORACLE_GAPS: &[(&str, &str, Gap, &str)] = &[
     ),
 ];
 
-fn near(a: f64, b: f64) -> bool {
-    (a - b).abs() <= 1e-9 * a.abs().max(b.abs()).max(1.0)
-}
-
-fn same(expected: &Value, got: &Json) -> bool {
-    match (expected, got) {
-        (Value::Number(a), Json::Number(b)) => near(*a, b.as_f64().unwrap()),
-        (Value::Text(a), Json::String(b)) => &**a == b,
-        (Value::Bool(a), Json::Bool(b)) => a == b,
-        (Value::Empty, Json::Null) => true,
-        (Value::Error(a), Json::Object(o)) => {
-            o.get("error").and_then(Json::as_str) == Some(a.as_str())
-        }
-        // A formula returning an empty string reads back as empty in ODS.
-        (Value::Empty, Json::String(s)) => s.is_empty(),
-        _ => false,
-    }
-}
-
 fn check(file: &str) {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/assets")
@@ -97,14 +80,14 @@ fn check(file: &str) {
     assert!(rows.len() > 150, "fixture looks truncated: {}", rows.len());
     let last = *rows.last().unwrap();
     let spec = Spec {
-        outputs: vec![BindingSpec::parse(&format!("r=Calc!A1:A{}", last + 1))],
+        outputs: vec![BindingSpec::parse(&format!("Calc!A1:A{}", last + 1))],
         fold: false,
         ..Spec::default()
     };
     let (program, report) = compile(&model, &spec).unwrap();
     let _ = report;
     let out = program.execute(&Json::Null, &Overrides::default()).unwrap();
-    let col = out["r"].as_array().unwrap();
+    let col = out[&format!("Calc!A1:A{}", last + 1)].as_array().unwrap();
 
     let mut bad = Vec::new();
     for &row in &rows {
@@ -130,7 +113,7 @@ fn check(file: &str) {
             }
             continue;
         }
-        if !same(&cell.value, got) {
+        if !common::matches_oracle(&cell.value, got) {
             bad.push(format!(
                 "  A{:<4} {label}\n        oracle: {:?}\n        engine: {got}",
                 row + 1,

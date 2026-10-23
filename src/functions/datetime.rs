@@ -12,7 +12,15 @@ pub(super) fn register(r: &mut Reg) {
             e.num(&a[1])?.trunc() as i64,
             e.num(&a[2])?.trunc() as i64,
         );
-        if (0..1900).contains(&y) && e.opts.date_system == crate::options::DateSystem::Excel1900 {
+        // Excel reads 0–1899 as an offset from 1900; LibreOffice only
+        // reinterprets two-digit years (30–99 → 19xx, 0–29 → 20xx).
+        if e.opts.bool_is_number() {
+            if (0..30).contains(&y) {
+                y += 2000;
+            } else if (30..100).contains(&y) {
+                y += 1900;
+            }
+        } else if (0..1900).contains(&y) {
             y += 1900;
         }
         dates::ymd_to_serial(y, m, d, e.opts.date_system).map_or(Err(ErrorKind::Num), num)

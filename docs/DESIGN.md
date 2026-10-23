@@ -61,10 +61,11 @@ resolved `ns::NAME`, so a program built from an ODS file runs identically
 anywhere, and a function missing from a namespace is a `#NAME?` plus a
 diagnostic rather than silent fallback to the wrong semantics.
 
-Not covered by namespaces yet: *operator* semantics that differ between
-LibreOffice and Excel — `0^0` (1 vs `#NUM!`), booleans converting to text
-(`"1"` vs `"TRUE"`), `"a"<TRUE`. These need an engine-level dialect flag (see
-roadmap); `tests/oracle.rs` lists them explicitly as oracle gaps.
+Operators and shared coercions cannot be namespaced, so they consult the
+**dialect** (`EngineOptions.dialect`, derived from the file extension, forced
+with `--dialect`): `0^0`, odd roots of negative numbers, booleans as numbers,
+number-to-text format, direct text arguments to `SUM`. The full list, with the
+evidence behind each case, is in [FIDELITY.md](FIDELITY.md).
 
 ## Hybrid compile / run time
 
@@ -108,40 +109,63 @@ The compiled loan example drops from 1086 formulas to 1 for `payment` (an
 intermediate computation that depends on inputs stays; the 360-row schedule
 nobody asked for is gone).
 
-Folding consumes the date system, iteration settings and locale, so a folded
+Folding consumes the date system, dialect, iteration settings and locale, so a folded
 program records them (`Program::folded_with`) and refuses run-time overrides
 that would contradict them; `--no-fold` keeps everything live and lets them be
 changed per run.
 
-## Dependency ordering: petgraph, ultragraph or in-house
+## Dependency ordering: in-house, no graph library
 
 Requirements: evaluation order, cycle detection (for iterative calculation),
-huge node counts, and one pass over both. Measured with
-`cargo run --release --example graph_bench` (random dependency graph, ~3 edges
-per node, build + order, release build):
+huge node counts, one pass for both. A measured comparison (random dependency
+graph, ~3 edges per node, build + order, release build; one-off benchmark, not
+kept in the tree) gave:
 
-| nodes | xlslang CSR + Tarjan | petgraph `tarjan_scc` (build + SCC) | petgraph `toposort` | ultragraph (build + freeze + toposort) |
-| ----: | -------------------: | ----------------------------------: | ------------------: | -------------------------------------: |
-| 10 k  | 0.33 ms | 0.88 ms | 0.40 ms | 28 ms |
+| nodes | CSR + Tarjan (here) | petgraph `tarjan_scc` | petgraph `toposort` | ultragraph |
+| ----: | ------------------: | --------------------: | ------------------: | ---------: |
 | 100 k | 3.3 ms  | 10.9 ms | 14.0 ms | 2.4 s |
 | 1 M   | 73 ms   | 177 ms  | 178 ms  | 31.8 s |
 
-* **ultragraph** is a hypergraph library for causal modeling; its mutable
-  graph builds in quadratic time here (`add_edge`) and it targets a different
-  problem. Rejected.
-* **petgraph** is excellent and `tarjan_scc` returns the same condensation
-  order. It is kept as a *dev-dependency*: the in-house implementation is
-  property-tested against it on random graphs.
-* **In-house CSR + iterative Tarjan** (~100 lines) is 2.4× faster than petgraph,
-  allocates only flat arrays, never recurses (no stack limits on 100k-long
-  chains) and returns components already flattened in schedule order. That is
-  why it is the production path. If a richer algorithm is ever needed
-  (incremental recomputation, dominators), switching to petgraph is a
-  contained change inside `graph.rs`.
+petgraph is a fine library and `tarjan_scc` returns the same condensation
+order, but nothing needs it: the in-house version is ~100 lines, iterative (no
+stack limit on 100k-long chains), 2.4× faster here, and returns components
+already flattened in schedule order. It is therefore the only implementation and
+petgraph is **not** a dependency, not even for tests: the unit test checks the
+SCC partition and the dependencies-first order against plain BFS reachability on
+random graphs, which needs no library. ultragraph (a causal-hypergraph library)
+builds in quadratic time here and was rejected.
 
 Range dependencies are modeled with shared *range nodes* (one per distinct
 rectangle) so `SUM(A$1:A$10000)` used by 50 000 cells costs one node, not 500 M
 edges.
+
+## Reusing `sheetrs`
+
+Yes, reuse it. Container parsing (zip, shared strings, shared formulas, ODS
+table repetition, covered cells, defined names, error cells) is where
+format-specific bugs live, and `sheetrs` already carries the fixes and the XLSX/ODS
+test files. Re-implementing it would add a second reader to keep faithful for no
+gain in the engine.
+
+Reuse is conditional on the reader being faithful, so the contract is: **the
+reader returns what the file stores; the engine owns every semantic decision.**
+Auditing against LibreOffice (see FIDELITY.md) found one violation, fixed in the
+paired `sheetrs` branch: ODS dates were numbered from 1899-12-31, a convention of
+the reader's own that is neither LibreOffice's nor Excel's (one lower from
+1900-03-01 on), and `office:time-value` was returned as display text. Dates are
+now days since the document's `table:null-date`, times a fraction of a day. No
+calendar adjustment happens in the reader; the date system (`1899`, `1900`,
+`1904`) is applied by the engine. Remaining reader-side items (documented in
+FIDELITY.md) are an upstream wish list: typed values, formula-string results that
+look numeric, `#VALUE!` placeholders, document calculation settings, defined-name
+scope.
+
+## Inputs and outputs are ranges
+
+The engine's interface is two lists of cells/ranges. No names, no schema:
+`Program.inputs`/`outputs` hold rectangles and JSON uses their canonical text as
+keys. Names, types, units and documentation belong to a later layer that maps
+friendly names to ranges.
 
 ## Parser: hand-written, not `pest`
 
@@ -158,7 +182,8 @@ a diagnostic.
 
 ## Execution parameters
 
-`EngineOptions`: date system (1900 with the 1900-02-29 quirk, or 1904),
+`EngineOptions`: dialect, date system (1900 with the 1900-02-29 quirk, 1904, or
+1899 = real calendar, the ODS default),
 iteration (`max_iterations`, `max_change`; Excel defaults 100 / 0.001), locale
 (decimal/group separators, boolean names, month and day names; `en`, `es`,
 `de`, `fr` built in) plus fixed `now` and `rand` seed for determinism. The
@@ -179,11 +204,12 @@ loaded by `xlslang run program.json`.
 ## Testing
 
 * Unit tests per module (parser precedence, dates, formats, rounding, graph).
-* The graph is cross-checked against petgraph on random graphs.
+* The graph is checked against BFS reachability on random graphs.
 * **Oracle**: `scripts/gen_semantics_fixture.py` writes ~200 formulas over
   fixed data, has LibreOffice recalculate and save XLSX and ODS, and
   `tests/oracle.rs` requires the engine to reproduce those cached values from
-  the formulas, per format. Documented gaps (LibreOffice vs Excel semantics,
+  the formulas, per format. `tests/probe.rs` does the same for ~120 probes of
+  Excel/LibreOffice differences in the `ods` dialect and pins the Excel side. Documented gaps (LibreOffice vs Excel semantics,
   reader limitations) are listed in the test with the reason.
 * `tests/pipeline.rs`: pruning, folding, cycles, iteration, dynamic references,
   options, JSON mapping.
@@ -206,14 +232,8 @@ loaded by `xlslang run program.json`.
   quadratic in graph size and run time (5 000 rows: 1 s). Fix planned:
   segment-tree dependency nodes and prefix-sum caching.
 * **Run-time `INDIRECT`/`OFFSET`** make the whole workbook reachable.
-* **Dialect operator semantics** (see above) follow Excel.
-* **ODS dates**: `sheetrs` converts `office:date-value` to a serial number with
-  real-calendar counting (1900-01-01 = 1, no 1900 leap-year quirk), which is
-  one less than the spreadsheet serial from 1900-03-01 on. Date cells stored as
-  typed dates in ODS inherit that offset; the loader cannot tell them apart from
-  plain numbers. `office:time-value` cells arrive as display text. Both belong
-  in `sheetrs` (expose the typed value or null-date-relative serials).
-  `tests/oracle.rs` avoids typed dates for this reason.
+* **Dialect differences not yet modeled** are listed in FIDELITY.md (regex mode
+  of ODS documents, Unicode case mapping, locale-bound text dates, …).
 * `NOW`/`TODAY` use the system clock (pass `--now` on WASM).
 
 ## Roadmap
@@ -249,8 +269,8 @@ predicates (`Expr`) attached to input bindings, evaluated before the run:
 
 ### Engine
 
-* Dialect flag in `EngineOptions` for operator semantics (LibreOffice vs
-  Excel booleans, `0^0`).
+* Read ODS calculation settings (regex/wildcards, null date, iteration) from the
+  file and map them to engine options.
 * Segment-tree dependency nodes; hash index cache for exact `VLOOKUP`/`MATCH`.
 * Narrow dynamic reachability from `INDIRECT`/`OFFSET` argument shapes.
 * Incremental recalculation for `--serve` (re-evaluate only the cone of the

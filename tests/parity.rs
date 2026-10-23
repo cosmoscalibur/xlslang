@@ -19,16 +19,6 @@ fn results(file: &str) -> Json {
     program.execute(&Json::Null, &Overrides::default()).unwrap()
 }
 
-/// Blank every number: shape, text and errors remain.
-fn shape(j: &Json) -> Json {
-    match j {
-        Json::Number(_) => Json::from(0),
-        Json::Array(a) => Json::Array(a.iter().map(shape).collect()),
-        Json::Object(o) => Json::Object(o.iter().map(|(k, v)| (k.clone(), shape(v))).collect()),
-        v => v.clone(),
-    }
-}
-
 #[test]
 fn minimal_workbook_computes_identically() {
     let (x, o) = (results("minimal_test.xlsx"), results("minimal_test.ods"));
@@ -36,13 +26,7 @@ fn minimal_workbook_computes_identically() {
         x.as_object().unwrap().len() >= 3,
         "expected several formula sheets"
     );
-    for sheet in ["Indexing tests", "hidden_formula_error"] {
-        assert_eq!(x[sheet], o[sheet], "{sheet}");
-    }
-    // Sheet7 sums a column holding typed dates, which `sheetrs` reads from ODS
-    // one serial lower than from XLSX (docs/DESIGN.md, known limitations):
-    // texts, errors and structure must still agree.
-    assert_eq!(shape(&x["Sheet7"]), shape(&o["Sheet7"]));
+    assert_eq!(x, o);
 }
 
 #[test]

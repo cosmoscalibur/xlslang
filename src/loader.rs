@@ -25,10 +25,11 @@ pub fn load(path: &Path) -> Result<Model, String> {
 
 pub fn from_workbook(wb: &Workbook, dialect: Ns) -> Model {
     let mut m = Model::new(dialect);
-    m.date_system = if wb.date1904 {
-        DateSystem::Excel1904
-    } else {
-        DateSystem::Excel1900
+    m.date_system = match (wb.date1904, dialect) {
+        (true, _) => DateSystem::Excel1904,
+        // OpenDocument's default null date is 1899-12-30 on the real calendar.
+        (false, Ns::Ods) => DateSystem::Real1899,
+        (false, _) => DateSystem::Excel1900,
     };
     m.names = wb
         .defined_names

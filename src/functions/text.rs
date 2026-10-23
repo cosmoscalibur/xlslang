@@ -16,7 +16,7 @@ pub(super) fn register(r: &mut Reg) {
         let mut parts = Vec::new();
         for v in &a[2..] {
             for x in &e.array_of(v.clone()).data {
-                let t = coerce::to_text(x, &e.opts.locale)?;
+                let t = coerce::to_text(x, &e.opts.locale, e.opts.bool_is_number())?;
                 if !(skip && t.is_empty()) {
                     parts.push(t);
                 }
@@ -166,10 +166,14 @@ pub(super) fn register(r: &mut Reg) {
     r.eager("TEXT", 2, 2, |e, a| {
         let v = e.scalar(a[0].clone());
         let fmt = e.text(&a[1])?;
+        let lo = e.opts.bool_is_number();
+        if fmt.is_empty() {
+            return Ok(Value::text(""));
+        }
         match v {
             Value::Text(t) => Ok(Value::Text(t)),
             Value::Error(k) => Err(k),
-            Value::Bool(_) => Ok(Value::text(coerce::to_text(&v, &e.opts.locale)?)),
+            Value::Bool(_) if !lo => Ok(Value::text(coerce::to_text(&v, &e.opts.locale, false)?)),
             v => {
                 let x = coerce::to_num(&v, &e.opts.locale, e.opts.date_system)?;
                 Ok(Value::text(format::format_number(
@@ -177,6 +181,7 @@ pub(super) fn register(r: &mut Reg) {
                     &fmt,
                     &e.opts.locale,
                     e.opts.date_system,
+                    lo,
                 )))
             }
         }
@@ -198,6 +203,7 @@ pub(super) fn register(r: &mut Reg) {
             &fmt,
             &e.opts.locale,
             e.opts.date_system,
+            e.opts.bool_is_number(),
         )))
     });
     r.eager("CHAR", 1, 1, |e, a| {
@@ -229,7 +235,11 @@ fn concat(e: &mut Engine, a: &[Value], flatten: bool) -> Res<Value> {
     for v in a {
         if flatten && matches!(v, Value::Ref(_) | Value::Array(_)) {
             for x in &e.array_of(v.clone()).data {
-                out.push_str(&coerce::to_text(x, &e.opts.locale)?);
+                out.push_str(&coerce::to_text(
+                    x,
+                    &e.opts.locale,
+                    e.opts.bool_is_number(),
+                )?);
             }
         } else {
             out.push_str(&e.text(v)?);

@@ -27,11 +27,7 @@ pub(super) fn register(r: &mut Reg) {
     });
     r.eager("POWER", 2, 2, |e, a| {
         let (x, y) = (e.num(&a[0])?, e.num(&a[1])?);
-        if x == 0.0 && y == 0.0 {
-            Err(ErrorKind::Num)
-        } else {
-            num(x.powf(y))
-        }
+        crate::engine::power(x, y, e.opts.bool_is_number()).map_or(Err(ErrorKind::Num), num)
     });
     r.eager("EXP", 1, 1, |e, a| num(e.num(&a[0])?.exp()));
     r.eager("LN", 1, 1, |e, a| {

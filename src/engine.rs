@@ -317,7 +317,7 @@ impl<'p> Engine<'p> {
 
     pub fn text(&mut self, v: &Value) -> Res<String> {
         let s = self.scalar(v.clone());
-        coerce::to_text(&s, &self.opts.locale)
+        coerce::to_text(&s, &self.opts.locale, self.opts.bool_is_number())
     }
 
     pub fn boolean(&mut self, v: &Value) -> Res<bool> {
@@ -342,6 +342,10 @@ impl<'p> Engine<'p> {
                     }
                 }
                 Value::Empty => {}
+                // LibreOffice does not coerce text given directly to SUM & co.
+                Value::Text(_) if self.opts.dialect == crate::ir::Ns::Ods => {
+                    return Err(ErrorKind::Value);
+                }
                 v => out.push(coerce::to_num(v, &self.opts.locale, self.opts.date_system)?),
             }
         }
@@ -495,13 +499,19 @@ impl<'p> Engine<'p> {
         }
         let loc = &self.opts.locale;
         let sys = self.opts.date_system;
+        let lo = self.opts.bool_is_number();
+        // LibreOffice has no separate boolean type: TRUE is 1 and FALSE is 0.
+        let as_num = |v: &Value| match v {
+            Value::Bool(b) if lo => Value::Number(f64::from(u8::from(*b))),
+            v => v.clone(),
+        };
         match op {
-            BinOp::Concat => match (coerce::to_text(a, loc), coerce::to_text(b, loc)) {
+            BinOp::Concat => match (coerce::to_text(a, loc, lo), coerce::to_text(b, loc, lo)) {
                 (Ok(x), Ok(y)) => Value::text(x + &y),
                 (Err(e), _) | (_, Err(e)) => Value::Error(e),
             },
             BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                let ord = compare(a, b);
+                let ord = compare(&as_num(a), &as_num(b));
                 Value::Bool(match op {
                     BinOp::Eq => ord == Ordering::Equal,
                     BinOp::Ne => ord != Ordering::Equal,
@@ -526,12 +536,10 @@ impl<'p> Engine<'p> {
                         }
                         x / y
                     }
-                    _ => {
-                        if x == 0.0 && y == 0.0 {
-                            return Value::Error(ErrorKind::Num);
-                        }
-                        x.powf(y)
-                    }
+                    _ => match power(x, y, lo) {
+                        Some(r) => r,
+                        None => return Value::Error(ErrorKind::Num),
+                    },
                 };
                 if r.is_finite() {
                     Value::Number(r)
@@ -546,6 +554,22 @@ impl<'p> Engine<'p> {
     pub fn get(&mut self, c: CellRef) -> Value {
         self.cell_value(c)
     }
+}
+
+/// `x^y`. Excel: `0^0` is `#NUM!` and a negative base needs an integer
+/// exponent. LibreOffice: `0^0` is 1 and `x^(1/n)` is the real root for odd `n`.
+pub fn power(x: f64, y: f64, lo: bool) -> Option<f64> {
+    if x == 0.0 && y == 0.0 {
+        return lo.then_some(1.0);
+    }
+    if lo && x < 0.0 && y != 0.0 && y.fract() != 0.0 {
+        let n = (1.0 / y).round();
+        if (1.0 / y - n).abs() < 1e-12 && n % 2.0 != 0.0 {
+            return Some(-(-x).powf(y));
+        }
+    }
+    let r = x.powf(y);
+    r.is_finite().then_some(r)
 }
 
 fn change(old: &Value, new: &Value) -> f64 {

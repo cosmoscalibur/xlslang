@@ -3,6 +3,7 @@
 //! they affected values folded by the compiler, see `Program::folded_with`).
 
 use crate::dates;
+use crate::ir::Ns;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -12,6 +13,9 @@ pub enum DateSystem {
     Excel1900,
     /// Serial 0 is 1904-01-01.
     Excel1904,
+    /// Serial 0 is 1899-12-30 on the real calendar: no 1900-02-29, negative
+    /// serials allowed. The default null date of OpenDocument/LibreOffice.
+    Real1899,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -197,12 +201,16 @@ impl Default for Locale {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EngineOptions {
     pub date_system: DateSystem,
     /// `None`: circular references evaluate to `#CIRC!`.
     pub iteration: Option<Iteration>,
     pub locale: Locale,
+    /// Behavioral family: `Ods` follows LibreOffice where it differs from Excel
+    /// (booleans are numbers, `0^0` is 1, …); `Xlsx` and `Core` follow Excel.
+    /// See docs/FIDELITY.md. Chosen from the file extension by the compiler.
+    pub dialect: Ns,
     /// Fixed value (serial number) for `NOW()`/`TODAY()`; the system clock
     /// when `None`.
     pub now: Option<f64>,
@@ -210,7 +218,25 @@ pub struct EngineOptions {
     pub rand_seed: Option<u64>,
 }
 
+impl Default for EngineOptions {
+    fn default() -> Self {
+        Self {
+            date_system: DateSystem::default(),
+            iteration: None,
+            locale: Locale::default(),
+            dialect: Ns::Core,
+            now: None,
+            rand_seed: None,
+        }
+    }
+}
+
 impl EngineOptions {
+    /// Whether booleans behave as the numbers 1/0 (LibreOffice).
+    pub fn bool_is_number(&self) -> bool {
+        self.dialect == Ns::Ods
+    }
+
     /// Current date-time as a serial number in the configured date system.
     pub fn now_serial(&self) -> f64 {
         self.now.unwrap_or_else(|| {

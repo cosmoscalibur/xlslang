@@ -31,6 +31,7 @@ fn epoch(sys: DateSystem) -> i64 {
         // shifted below to reproduce the fictitious 1900-02-29.
         DateSystem::Excel1900 => days_from_civil(1899, 12, 30),
         DateSystem::Excel1904 => days_from_civil(1904, 1, 1),
+        DateSystem::Real1899 => days_from_civil(1899, 12, 30),
     }
 }
 
@@ -44,18 +45,30 @@ pub fn ymd_to_serial(y: i64, m: i64, d: i64, sys: DateSystem) -> Option<f64> {
     if sys == DateSystem::Excel1900 && days < days_from_civil(1900, 3, 1) {
         serial -= 1;
     }
-    (0..2_958_466).contains(&serial).then_some(serial as f64)
+    let min = if sys == DateSystem::Real1899 {
+        -693_594
+    } else {
+        0
+    };
+    (min..2_958_466).contains(&serial).then_some(serial as f64)
 }
 
 pub fn serial_to_ymd(serial: f64, sys: DateSystem) -> Option<(i64, i64, i64)> {
-    if !(0.0..2_958_466.0).contains(&serial) {
+    let min = if sys == DateSystem::Real1899 {
+        -693_594.0
+    } else {
+        0.0
+    };
+    if !(min..2_958_466.0).contains(&serial) {
         return None;
     }
     let s = serial.floor() as i64;
     if sys == DateSystem::Excel1900 {
         match s {
+            // Excel's day zero is the non-date 1900-01-00.
+            0 => return Some((1900, 1, 0)),
             60 => return Some((1900, 2, 29)),
-            0..=59 => return Some(civil_from_days(epoch(sys) + s + 1)),
+            1..=59 => return Some(civil_from_days(epoch(sys) + s + 1)),
             _ => {}
         }
     }
@@ -68,6 +81,8 @@ pub fn weekday_sun0(serial: f64, sys: DateSystem) -> i64 {
     match sys {
         DateSystem::Excel1900 => (s - 1).rem_euclid(7),
         DateSystem::Excel1904 => (s + 5).rem_euclid(7),
+        // 1899-12-30 was a Saturday.
+        DateSystem::Real1899 => (s + 6).rem_euclid(7),
     }
 }
 

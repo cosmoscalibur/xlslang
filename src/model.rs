@@ -36,7 +36,12 @@ impl Model {
             sheets: Vec::new(),
             cells: HashMap::new(),
             names: HashMap::new(),
-            date_system: DateSystem::default(),
+            // OpenDocument numbers dates from 1899-12-30 on the real calendar.
+            date_system: if dialect == Ns::Ods {
+                DateSystem::Real1899
+            } else {
+                DateSystem::Excel1900
+            },
             dialect,
             diagnostics: Vec::new(),
         }

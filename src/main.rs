@@ -94,6 +94,7 @@ fn spec_from(args: &mut Args) -> Result<(Spec, xlslang::Overrides), Fail> {
         inputs,
         outputs,
         date_system: o.date_system,
+        dialect: o.dialect,
         iteration: o.iteration.flatten(),
         locale: o.locale.clone(),
         now: o.now,
@@ -204,8 +205,9 @@ fn calc(mut args: Args) -> Result<i32, Fail> {
     let s = m.add_sheet("Sheet1");
     m.set_formula(s, "A1", formula);
     let spec = Spec {
-        outputs: vec![BindingSpec::parse("result=Sheet1!A1")],
+        outputs: vec![BindingSpec::parse("Sheet1!A1")],
         date_system: o.date_system,
+        dialect: o.dialect,
         iteration: o.iteration.flatten(),
         locale: o.locale.clone(),
         now: o.now,
@@ -220,7 +222,7 @@ fn calc(mut args: Args) -> Result<i32, Fail> {
     let out = program
         .execute(&serde_json::Value::Null, &xlslang::Overrides::default())
         .map_err(|e| Fail::Run(e.0))?;
-    println!("{}", out["result"]);
+    println!("{}", out["Sheet1!A1"]);
     Ok(0)
 }
 

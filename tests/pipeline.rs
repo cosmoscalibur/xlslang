@@ -20,7 +20,7 @@ fn model() -> xlslang::Model {
 
 #[test]
 fn inputs_outputs_prune_and_fold() {
-    let (p, r) = build(&model(), &spec(&["price=A1", "qty=A2"], &["total=C2"]));
+    let (p, r) = build(&model(), &spec(&["A1", "A2"], &["C2"]));
     // D1/D2 are dead; B2 is folded to a constant; C1 and C2 stay.
     assert_eq!(r.formulas_total, 5);
     assert_eq!(r.formulas_kept, 2);
@@ -37,24 +37,27 @@ fn inputs_outputs_prune_and_fold() {
     );
 
     let out = p
-        .execute(&json!({"price": 100, "qty": 3}), &Overrides::default())
+        .execute(
+            &json!({"Sheet1!A1": 100, "Sheet1!A2": 3}),
+            &Overrides::default(),
+        )
         .unwrap();
-    assert_eq!(out["total"], json!(300.0 * 1.21 + 0.42));
+    assert_eq!(out["Sheet1!C2"], json!(300.0 * 1.21 + 0.42));
     // Defaults come from the source file when an input is omitted.
     let out = p
-        .execute(&json!({"qty": 1}), &Overrides::default())
+        .execute(&json!({"Sheet1!A2": 1}), &Overrides::default())
         .unwrap();
-    assert_eq!(out["total"], json!(100.0 * 1.21 + 0.42));
+    assert_eq!(out["Sheet1!C2"], json!(100.0 * 1.21 + 0.42));
 }
 
 #[test]
 fn unknown_and_malformed_inputs_are_rejected() {
-    let (p, _) = build(&model(), &spec(&["price=A1"], &["total=C2"]));
+    let (p, _) = build(&model(), &spec(&["A1"], &["C2"]));
     let e = p
         .execute(&json!({"nope": 1}), &Overrides::default())
         .unwrap_err();
     assert!(
-        e.0.contains("unknown input `nope`") && e.0.contains("price"),
+        e.0.contains("unknown input `nope`") && e.0.contains("Sheet1!A1"),
         "{e}"
     );
     assert!(p.execute(&json!([1]), &Overrides::default()).is_err());
@@ -62,11 +65,11 @@ fn unknown_and_malformed_inputs_are_rejected() {
 
 #[test]
 fn everything_folds_without_inputs() {
-    let (p, r) = build(&model(), &spec(&[], &["total=C2", "d=D2"]));
+    let (p, r) = build(&model(), &spec(&[], &["C2", "D2"]));
     assert_eq!(r.formulas_kept, 0);
     assert!(p.cells.iter().all(|c| matches!(c.kind, CellKind::Const(_))));
     let out = p.execute(&Json::Null, &Overrides::default()).unwrap();
-    assert_eq!(out["d"], json!(6000));
+    assert_eq!(out["Sheet1!D2"], json!(6000));
 }
 
 #[test]
@@ -80,16 +83,16 @@ fn range_bindings_use_json_matrices() {
         ("B3", json!("=A3*2")),
         ("C1", json!("=SUM(B1:B3)")),
     ]);
-    let (p, _) = build(&m, &spec(&["xs=A1:A3"], &["ys=B1:B3", "sum=C1"]));
+    let (p, _) = build(&m, &spec(&["A1:A3"], &["B1:B3", "C1"]));
     for input in [json!([1, 2, 3]), json!([[1], [2], [3]])] {
         let out = p
-            .execute(&json!({ "xs": input }), &Overrides::default())
+            .execute(&json!({ "Sheet1!A1:A3": input }), &Overrides::default())
             .unwrap();
-        assert_eq!(out["ys"], json!([[2], [4], [6]]));
-        assert_eq!(out["sum"], json!(12));
+        assert_eq!(out["Sheet1!B1:B3"], json!([[2], [4], [6]]));
+        assert_eq!(out["Sheet1!C1"], json!(12));
     }
     let e = p
-        .execute(&json!({"xs": [1, 2]}), &Overrides::default())
+        .execute(&json!({"Sheet1!A1:A3": [1, 2]}), &Overrides::default())
         .unwrap_err();
     assert!(e.0.contains("expects 3"), "{e}");
 }
@@ -101,22 +104,22 @@ fn errors_and_blanks_in_json() {
         ("B1", json!("=A1/0")),
         ("C1", json!("=A2")),
     ]);
-    let (p, _) = build(&m, &spec(&["x=A1"], &["b=B1", "c=C1", "t=D1"]));
+    let (p, _) = build(&m, &spec(&["A1"], &["B1", "C1", "D1"]));
     let out = p
-        .execute(&json!({"x": "hi"}), &Overrides::default())
+        .execute(&json!({"Sheet1!A1": "hi"}), &Overrides::default())
         .unwrap();
-    assert_eq!(out["b"], err("#VALUE!"));
-    assert_eq!(out["c"], Json::Null);
-    assert_eq!(out["t"], Json::Null);
+    assert_eq!(out["Sheet1!B1"], err("#VALUE!"));
+    assert_eq!(out["Sheet1!C1"], Json::Null);
+    assert_eq!(out["Sheet1!D1"], Json::Null);
 }
 
 #[test]
 fn default_outputs_cover_formula_ranges() {
     let (p, _) = build(&model(), &spec(&[], &[]));
     assert_eq!(p.outputs.len(), 1);
-    assert_eq!(p.outputs[0].name, "Sheet1");
+    assert_eq!(p.outputs[0].name, "Sheet1!B1:D2");
     let out = p.execute(&Json::Null, &Overrides::default()).unwrap();
-    assert_eq!(out["Sheet1"][1][1], json!(300.0 * 1.21 + 0.42)); // C2 in B1:D2
+    assert_eq!(out["Sheet1!B1:D2"][1][1], json!(300.0 * 1.21 + 0.42)); // C2 in B1:D2
 }
 
 #[test]
@@ -126,11 +129,11 @@ fn circular_references_and_iteration() {
         ("B1", json!("=A1+1")),
         ("C1", json!("=A1")),
     ]);
-    let (p, r) = build(&m, &spec(&[], &["a=A1", "c=C1"]));
+    let (p, r) = build(&m, &spec(&[], &["A1", "C1"]));
     assert_eq!(r.cycles, 1);
     let out = p.execute(&Json::Null, &Overrides::default()).unwrap();
-    assert_eq!(out["a"], err("#CIRC!"));
-    assert_eq!(out["c"], err("#CIRC!"));
+    assert_eq!(out["Sheet1!A1"], err("#CIRC!"));
+    assert_eq!(out["Sheet1!C1"], err("#CIRC!"));
 
     // x = y/2 + 10, y = x  →  x = y = 20.
     let m = sheet(&[
@@ -138,15 +141,15 @@ fn circular_references_and_iteration() {
         ("B1", json!("=A1")),
         ("C1", json!("=A1+B1")),
     ]);
-    let mut s = spec(&[], &["a=A1", "c=C1"]);
+    let mut s = spec(&[], &["A1", "C1"]);
     s.iteration = Some(Iteration {
         max_iterations: 200,
         max_change: 1e-12,
     });
     let (p, _) = build(&m, &s);
     let out = p.execute(&Json::Null, &Overrides::default()).unwrap();
-    assert!((out["a"].as_f64().unwrap() - 20.0).abs() < 1e-9);
-    assert!((out["c"].as_f64().unwrap() - 40.0).abs() < 1e-9);
+    assert!((out["Sheet1!A1"].as_f64().unwrap() - 20.0).abs() < 1e-9);
+    assert!((out["Sheet1!C1"].as_f64().unwrap() - 40.0).abs() < 1e-9);
 }
 
 #[test]
@@ -157,7 +160,7 @@ fn cycles_through_inputs_survive_to_run_time() {
         ("B1", json!("=C1*0.5+A1")),
         ("C1", json!("=B1")),
     ]);
-    let mut s = spec(&["k=A1"], &["b=B1"]);
+    let mut s = spec(&["A1"], &["B1"]);
     s.iteration = Some(Iteration {
         max_iterations: 500,
         max_change: 1e-12,
@@ -165,8 +168,10 @@ fn cycles_through_inputs_survive_to_run_time() {
     let (p, r) = build(&m, &s);
     assert_eq!(r.formulas_kept, 2);
     assert_eq!(p.cycles.len(), 1);
-    let out = p.execute(&json!({"k": 5}), &Overrides::default()).unwrap();
-    assert!((out["b"].as_f64().unwrap() - 10.0).abs() < 1e-9);
+    let out = p
+        .execute(&json!({"Sheet1!A1": 5}), &Overrides::default())
+        .unwrap();
+    assert!((out["Sheet1!B1"].as_f64().unwrap() - 10.0).abs() < 1e-9);
 }
 
 #[test]
@@ -181,7 +186,7 @@ fn dynamic_references_resolve_at_run_time() {
         ("C3", json!("=SUM(OFFSET(B1,0,0,A1,1))")),
         ("C4", json!("=INDIRECT(\"B3\")")), // static: resolved at build time
     ]);
-    let (p, r) = build(&m, &spec(&["row=A1"], &["c=C1:C4"]));
+    let (p, r) = build(&m, &spec(&["A1"], &["C1:C4"]));
     assert!(r.dynamic_refs);
     for (row, want) in [
         (1, [10, 20, 10, 40]),
@@ -189,9 +194,9 @@ fn dynamic_references_resolve_at_run_time() {
         (3, [40, 0, 70, 40]),
     ] {
         let out = p
-            .execute(&json!({"row": row}), &Overrides::default())
+            .execute(&json!({"Sheet1!A1": row}), &Overrides::default())
             .unwrap();
-        let got: Vec<Json> = out["c"]
+        let got: Vec<Json> = out["Sheet1!C1:C4"]
             .as_array()
             .unwrap()
             .iter()
@@ -210,11 +215,11 @@ fn dynamic_references_resolve_at_run_time() {
     // The static INDIRECT became a plain reference.
     let (p, r) = build(
         &sheet(&[("A1", json!("=INDIRECT(\"B1\")")), ("B1", json!(4))]),
-        &spec(&[], &["a=A1"]),
+        &spec(&[], &["A1"]),
     );
     assert!(!r.dynamic_refs);
     assert_eq!(
-        p.execute(&Json::Null, &Overrides::default()).unwrap()["a"],
+        p.execute(&Json::Null, &Overrides::default()).unwrap()["Sheet1!A1"],
         json!(4)
     );
 }
@@ -226,7 +231,7 @@ fn run_time_options_and_folding() {
         ("B1", json!("=TEXT(A1,\"#,##0.00\")&\" \"&(1/2)")),
     ]);
     // Folded at build time: overriding the locale later must be refused.
-    let (p, _) = build(&m, &spec(&[], &["t=B1"]));
+    let (p, _) = build(&m, &spec(&[], &["B1"]));
     let es = Overrides {
         locale: Some(Locale::es_es()),
         ..Default::default()
@@ -239,11 +244,11 @@ fn run_time_options_and_folding() {
     );
 
     // Built with the locale: baked in.
-    let mut s = spec(&[], &["t=B1"]);
+    let mut s = spec(&[], &["B1"]);
     s.locale = Some(Locale::es_es());
     let (p, _) = build(&m, &s);
     assert_eq!(
-        p.execute(&Json::Null, &Overrides::default()).unwrap()["t"],
+        p.execute(&Json::Null, &Overrides::default()).unwrap()["Sheet1!B1"],
         json!("1.234,50 0,5")
     );
 
@@ -252,15 +257,15 @@ fn run_time_options_and_folding() {
         &m,
         &Spec {
             fold: false,
-            ..spec(&[], &["t=B1"])
+            ..spec(&[], &["B1"])
         },
     );
     assert_eq!(
-        p.execute(&Json::Null, &Overrides::default()).unwrap()["t"],
+        p.execute(&Json::Null, &Overrides::default()).unwrap()["Sheet1!B1"],
         json!("1,234.50 0.5")
     );
     assert_eq!(
-        p.execute(&Json::Null, &es).unwrap()["t"],
+        p.execute(&Json::Null, &es).unwrap()["Sheet1!B1"],
         json!("1.234,50 0,5")
     );
 
@@ -269,7 +274,7 @@ fn run_time_options_and_folding() {
         &m,
         &Spec {
             fold: false,
-            ..spec(&[], &["d=A1"])
+            ..spec(&[], &["A1"])
         },
     );
     let o = Overrides {
@@ -277,16 +282,19 @@ fn run_time_options_and_folding() {
         ..Default::default()
     };
     assert_eq!(
-        p.execute(&Json::Null, &Overrides::default()).unwrap()["d"],
+        p.execute(&Json::Null, &Overrides::default()).unwrap()["Sheet1!A1"],
         json!(45292)
     );
-    assert_eq!(p.execute(&Json::Null, &o).unwrap()["d"], json!(43830));
+    assert_eq!(
+        p.execute(&Json::Null, &o).unwrap()["Sheet1!A1"],
+        json!(43830)
+    );
 }
 
 #[test]
 fn volatile_functions_are_not_folded() {
     let m = sheet(&[("A1", json!("=RAND()")), ("B1", json!("=TODAY()"))]);
-    let (p, r) = build(&m, &spec(&[], &["a=A1", "b=B1"]));
+    let (p, r) = build(&m, &spec(&[], &["A1", "B1"]));
     assert_eq!(r.formulas_kept, 2);
     let o = Overrides {
         rand_seed: Some(7),
@@ -295,21 +303,21 @@ fn volatile_functions_are_not_folded() {
     };
     let x = p.execute(&Json::Null, &o).unwrap();
     assert_eq!(x, p.execute(&Json::Null, &o).unwrap()); // deterministic when seeded
-    assert_eq!(x["b"], json!(45292));
-    let a = x["a"].as_f64().unwrap();
+    assert_eq!(x["Sheet1!B1"], json!(45292));
+    let a = x["Sheet1!A1"].as_f64().unwrap();
     assert!((0.0..1.0).contains(&a));
 }
 
 #[test]
 fn program_roundtrips_through_json() {
-    let (p, _) = build(&model(), &spec(&["price=A1"], &["total=C2"]));
+    let (p, _) = build(&model(), &spec(&["A1"], &["C2"]));
     let text = serde_json::to_string(&p).unwrap();
     let q: xlslang::Program = serde_json::from_str(&text).unwrap();
     assert_eq!(p, q);
     let o = Overrides::default();
     assert_eq!(
-        p.execute(&json!({"price": 7}), &o).unwrap(),
-        q.execute(&json!({"price": 7}), &o).unwrap()
+        p.execute(&json!({"Sheet1!A1": 7}), &o).unwrap(),
+        q.execute(&json!({"Sheet1!A1": 7}), &o).unwrap()
     );
 }
 
@@ -317,18 +325,18 @@ fn program_roundtrips_through_json() {
 fn defined_names_bind_and_parse() {
     let mut m = sheet(&[("A1", json!(5)), ("B1", json!("=Rate*2"))]);
     m.names.insert("Rate".into(), "Sheet1!$A$1".into());
-    let (p, _) = build(&m, &spec(&["Rate"], &["b=B1"]));
+    let (p, _) = build(&m, &spec(&["Rate"], &["B1"]));
     assert_eq!(
-        p.execute(&json!({"Rate": 4}), &Overrides::default())
-            .unwrap()["b"],
+        p.execute(&json!({"Sheet1!A1": 4}), &Overrides::default())
+            .unwrap()["Sheet1!B1"],
         json!(8)
     );
 }
 
 #[test]
 fn bad_targets_fail_early() {
-    let e = xlslang::compile(&model(), &spec(&["Nope!A1"], &["total=C2"])).unwrap_err();
+    let e = xlslang::compile(&model(), &spec(&["Nope!A1"], &["C2"])).unwrap_err();
     assert!(e.0.contains("cannot resolve"));
-    let e = xlslang::compile(&model(), &spec(&["x=A1", "x=A2"], &["total=C2"])).unwrap_err();
-    assert!(e.0.contains("duplicate"));
+    let e = xlslang::compile(&model(), &spec(&["A1", "A1"], &["C2"])).unwrap_err();
+    assert!(e.0.contains("declared twice"));
 }

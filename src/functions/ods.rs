@@ -5,9 +5,17 @@
 use super::{Reg, num};
 use crate::dates;
 use crate::ir::Ns;
-use crate::value::ErrorKind;
+use crate::value::{ErrorKind, Value};
 
 pub(super) fn register(r: &mut Reg) {
+    // LibreOffice has no boolean type: TRUE() is a number.
+    r.eager_in(Ns::Ods, "ISNUMBER", 1, 1, |e, a| {
+        Ok(Value::Bool(matches!(
+            e.scalar(a[0].clone()),
+            Value::Number(_) | Value::Bool(_)
+        )))
+    });
+
     // Gregorian Easter (Meeus/Jones/Butcher); Excel has no such function.
     r.eager_in(Ns::Ods, "EASTERSUNDAY", 1, 1, |e, a| {
         let y = e.num(&a[0])?.trunc() as i64;

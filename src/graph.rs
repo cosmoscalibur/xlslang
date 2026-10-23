@@ -125,8 +125,6 @@ pub fn is_cycle(g: &Csr, comp: &[u32]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use petgraph::algo::tarjan_scc;
-    use petgraph::graph::DiGraph;
 
     fn lcg(seed: &mut u64) -> u32 {
         *seed = seed
@@ -152,60 +150,60 @@ mod tests {
         assert_eq!(s.components().count(), 3);
     }
 
+    /// Reachability by plain BFS: the oracle for the SCC partition.
+    fn reach(adj: &[Vec<u32>], from: usize) -> Vec<bool> {
+        let mut seen = vec![false; adj.len()];
+        let mut stack = vec![from];
+        seen[from] = true;
+        while let Some(v) = stack.pop() {
+            for &w in &adj[v] {
+                if !seen[w as usize] {
+                    seen[w as usize] = true;
+                    stack.push(w as usize);
+                }
+            }
+        }
+        seen
+    }
+
     #[test]
-    fn matches_petgraph_on_random_graphs() {
+    fn matches_brute_force_on_random_graphs() {
         let mut seed = 42;
-        for n in [1usize, 2, 10, 200, 2000] {
-            let mut adj = vec![Vec::new(); n];
-            for edges in adj.iter_mut() {
-                for _ in 0..(lcg(&mut seed) % 4) {
-                    edges.push(lcg(&mut seed) % n as u32);
+        for n in [1usize, 2, 10, 60, 150] {
+            for density in [1u32, 2, 4] {
+                let mut adj = vec![Vec::new(); n];
+                for edges in adj.iter_mut() {
+                    for _ in 0..(lcg(&mut seed) % (density + 1)) {
+                        edges.push(lcg(&mut seed) % n as u32);
+                    }
+                }
+                let s = tarjan(&Csr::from_adjacency(&adj));
+                let mut comp_of = vec![usize::MAX; n];
+                for (i, c) in s.components().enumerate() {
+                    for &v in c {
+                        assert_eq!(comp_of[v as usize], usize::MAX, "node listed twice");
+                        comp_of[v as usize] = i;
+                    }
+                }
+                assert!(comp_of.iter().all(|&c| c != usize::MAX), "node missing");
+                let r: Vec<Vec<bool>> = (0..n).map(|v| reach(&adj, v)).collect();
+                for u in 0..n {
+                    for v in 0..n {
+                        // Same component exactly when mutually reachable.
+                        assert_eq!(
+                            comp_of[u] == comp_of[v],
+                            r[u][v] && r[v][u],
+                            "n={n} {u} {v}"
+                        );
+                    }
+                }
+                // Dependencies first: every edge leads to an earlier or same component.
+                for (v, es) in adj.iter().enumerate() {
+                    for &w in es {
+                        assert!(comp_of[w as usize] <= comp_of[v]);
+                    }
                 }
             }
-            let mut pg = DiGraph::<(), ()>::new();
-            let ix: Vec<_> = (0..n).map(|_| pg.add_node(())).collect();
-            for (v, es) in adj.iter().enumerate() {
-                for &w in es {
-                    pg.add_edge(ix[v], ix[w as usize], ());
-                }
-            }
-            let mut want: Vec<Vec<usize>> = tarjan_scc(&pg)
-                .into_iter()
-                .map(|c| {
-                    let mut c: Vec<usize> = c.into_iter().map(|i| i.index()).collect();
-                    c.sort_unstable();
-                    c
-                })
-                .collect();
-            let s = tarjan(&Csr::from_adjacency(&adj));
-            let mut got: Vec<Vec<usize>> = s
-                .components()
-                .map(|c| {
-                    let mut c: Vec<usize> = c.iter().map(|&x| x as usize).collect();
-                    c.sort_unstable();
-                    c
-                })
-                .collect();
-            // Same partition...
-            let (mut a, mut b) = (want.clone(), got.clone());
-            a.sort();
-            b.sort();
-            assert_eq!(a, b, "n={n}");
-            // ...and dependencies first: every edge points to an earlier or
-            // same component.
-            let mut comp_of = vec![0usize; n];
-            for (i, c) in s.components().enumerate() {
-                for &v in c {
-                    comp_of[v as usize] = i;
-                }
-            }
-            for (v, es) in adj.iter().enumerate() {
-                for &w in es {
-                    assert!(comp_of[w as usize] <= comp_of[v]);
-                }
-            }
-            want.clear();
-            got.clear();
         }
     }
 }

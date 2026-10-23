@@ -221,6 +221,21 @@ pub fn split_sheet(s: &str) -> (Option<String>, &str) {
     }
 }
 
+/// Canonical text of a range with its sheet: `Sheet1!B2:C9`, quoting the sheet
+/// name when it needs it (`'My Sheet'!A1`).
+pub fn qualified(sheets: &[String], r: &Rect) -> String {
+    let name = sheets.get(r.sheet as usize).map_or("?", String::as_str);
+    let plain = !name.is_empty()
+        && name.chars().all(|c| c.is_alphanumeric() || c == '_')
+        && !name.starts_with(|c: char| c.is_ascii_digit());
+    let sheet = if plain {
+        name.to_string()
+    } else {
+        format!("'{}'", name.replace('\'', "''"))
+    };
+    format!("{sheet}!{}", rect_text(r))
+}
+
 /// Format a rectangle as A1 text (without sheet).
 pub fn rect_text(r: &Rect) -> String {
     if r.is_single() {
