@@ -40,6 +40,9 @@ pub struct Model {
     /// Namespace tried first when resolving function names.
     pub dialect: Ns,
     pub settings: ModelSettings,
+    /// Built by a file loader: the document defines date system, iteration,
+    /// search settings and dialect, and a `Spec` may not override them.
+    pub from_file: bool,
     pub diagnostics: Vec<String>,
 }
 
@@ -57,6 +60,7 @@ impl Model {
             },
             dialect,
             settings: ModelSettings::default(),
+            from_file: false,
             diagnostics: Vec::new(),
         }
     }
@@ -102,7 +106,7 @@ impl Model {
     pub fn sheet_id(&self, name: &str) -> Option<u16> {
         self.sheets
             .iter()
-            .position(|s| s.eq_ignore_ascii_case(name))
+            .position(|s| crate::addr::same_name(s, name))
             .map(|i| i as u16)
     }
 }

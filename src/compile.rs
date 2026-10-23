@@ -50,8 +50,6 @@ pub struct Spec {
     pub dialect: Option<Ns>,
     pub iteration: Option<Iteration>,
     pub locale: Option<Locale>,
-    /// Use the document's language as locale when `locale` is not given.
-    pub locale_from_document: bool,
     pub search: Option<Search>,
     pub now: Option<f64>,
     pub rand_seed: Option<u64>,
@@ -68,7 +66,6 @@ impl Default for Spec {
             dialect: None,
             iteration: None,
             locale: None,
-            locale_from_document: false,
             search: None,
             now: None,
             rand_seed: None,
@@ -125,7 +122,7 @@ pub fn resolve_target(model: &Model, target: &str) -> Result<Rect, CompileError>
         && let Some(def) = model
             .names
             .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(target.trim()))
+            .find(|(k, _)| addr::same_name(k, target.trim()))
             .map(|(_, v)| v.as_str())
     {
         let (sh, t) = addr::split_sheet(def.trim_start_matches('='));
@@ -146,6 +143,20 @@ struct Flags {
 }
 
 pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileError> {
+    if model.from_file
+        && let Some(what) = [
+            (spec.date_system.is_some(), "date system"),
+            (spec.dialect.is_some(), "dialect"),
+            (spec.iteration.is_some(), "iteration"),
+            (spec.search.is_some(), "search settings"),
+        ]
+        .iter()
+        .find_map(|(set, name)| set.then_some(*name))
+    {
+        return err(format!(
+            "the {what} is defined by the document and cannot be overridden"
+        ));
+    }
     let mut report = Report::default();
     let mut diags: Vec<String> = model.diagnostics.clone();
     let mut parse_diags: Vec<String> = Vec::new();
@@ -353,20 +364,21 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
     }
 
     // Precedence: explicit option > what the document states > default.
-    // The document's language does not decide how text converts to numbers or
-    // dates: Excel and LibreOffice use the user's regional settings, which a file
-    // does not carry. So `en` is the default and the document language is used
-    // only on request (`locale_from_document`).
-    let mut locale = match (&spec.locale, spec.locale_from_document) {
-        (Some(l), _) => l.clone(),
-        (None, true) => model
-            .settings
-            .locale
-            .as_deref()
-            .and_then(Locale::by_tag)
-            .unwrap_or_default(),
-        (None, false) => Locale::default(),
-    };
+    // The locale is the user's regional setting, which a file does not carry
+    // (LibreOffice evaluates a document whose language says `es-ES` with the
+    // system locale), so it comes from the caller and defaults to `en`. The
+    // document's language is informational.
+    let mut locale = spec.locale.clone().unwrap_or_default();
+    if let Some(lang) = &model.settings.locale
+        && !lang
+            .to_lowercase()
+            .starts_with(locale.tag.split('-').next().unwrap_or("en"))
+    {
+        diags.push(format!(
+            "the document language is {lang}; text and number conversions follow the locale {} (--locale)",
+            locale.tag
+        ));
+    }
     locale.date_patterns = if spec.dialect.unwrap_or(model.dialect) == Ns::Ods {
         DatePatterns::Libre
     } else {
@@ -667,7 +679,7 @@ fn indirect_const(args: &[Expr], at: CellRef, sheets: &[String]) -> Option<Rect>
     }
     let (sheet, tail) = addr::split_sheet(t.trim());
     let sheet = match sheet {
-        Some(n) => sheets.iter().position(|s| s.eq_ignore_ascii_case(&n))? as u16,
+        Some(n) => sheets.iter().position(|s| addr::same_name(s, &n))? as u16,
         None => at.sheet,
     };
     addr::parse_area(tail).map(|a| a.bind(sheet))

@@ -246,7 +246,7 @@ impl<'p> Engine<'p> {
         self.prog
             .sheets
             .iter()
-            .position(|s| s.eq_ignore_ascii_case(name))
+            .position(|s| crate::addr::same_name(s, name))
             .map(|i| i as u16)
     }
 

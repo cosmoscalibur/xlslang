@@ -1,6 +1,5 @@
-//! Execution parameters of the engine: date system, iterative calculation and
-//! locale. They can be fixed at build time and overridden at run time (unless
-//! they affected values folded by the compiler, see `Program::folded_with`).
+//! Execution parameters of the engine. Date system, iteration, search settings
+//! and dialect are defined by the document; the locale is the user's.
 
 use crate::dates;
 use crate::ir::Ns;
@@ -186,82 +185,14 @@ impl Locale {
         }
     }
 
-    pub fn de_de() -> Self {
-        Self {
-            tag: "de-DE".into(),
-            date_order: DateOrder::Dmy,
-            date_patterns: DatePatterns::Excel,
-            two_digit_year_start: 1930,
-            decimal: ',',
-            group: '.',
-            true_text: "WAHR".into(),
-            false_text: "FALSCH".into(),
-            currency: "€".into(),
-            months: strs([
-                "Januar",
-                "Februar",
-                "März",
-                "April",
-                "Mai",
-                "Juni",
-                "Juli",
-                "August",
-                "September",
-                "Oktober",
-                "November",
-                "Dezember",
-            ]),
-            days: strs([
-                "Sonntag",
-                "Montag",
-                "Dienstag",
-                "Mittwoch",
-                "Donnerstag",
-                "Freitag",
-                "Samstag",
-            ]),
-        }
-    }
-
-    pub fn fr_fr() -> Self {
-        Self {
-            tag: "fr-FR".into(),
-            date_order: DateOrder::Dmy,
-            date_patterns: DatePatterns::Excel,
-            two_digit_year_start: 1930,
-            decimal: ',',
-            group: '\u{202f}',
-            true_text: "VRAI".into(),
-            false_text: "FAUX".into(),
-            currency: "€".into(),
-            months: strs([
-                "janvier",
-                "février",
-                "mars",
-                "avril",
-                "mai",
-                "juin",
-                "juillet",
-                "août",
-                "septembre",
-                "octobre",
-                "novembre",
-                "décembre",
-            ]),
-            days: strs([
-                "dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi",
-            ]),
-        }
-    }
-
-    /// Built-in locale by BCP-47-like tag (`es`, `es-ES`, `es_ES` …).
+    /// Built-in locale by BCP-47-like tag (`en`, `es`). Only languages whose
+    /// conventions are verified against a real application are supported.
+    /// (`es`, `es-ES`, `es_ES` …).
     pub fn by_tag(tag: &str) -> Option<Self> {
         let norm = tag.replace('_', "-").to_ascii_lowercase();
         match norm.split('-').next()? {
             "en" => Some(Self::en_us()),
             "es" => Some(Self::es_es()),
-            "de" => Some(Self::de_de()),
-            "fr" => Some(Self::fr_fr()),
             _ => None,
         }
     }

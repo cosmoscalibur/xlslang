@@ -150,17 +150,49 @@ fn serve_mode_answers_line_by_line() {
 }
 
 #[test]
-fn run_time_options_on_a_no_fold_build() {
+fn run_time_options_are_only_what_a_file_cannot_say() {
     let dir = tempfile::tempdir().unwrap();
-    // Without --no-fold the date system is fixed at build time and refused.
+    // The locale is folded into a default build: changing it later is refused.
     let folded = build_loan("loan.xlsx", dir.path(), &[]);
-    let (code, _, err) = run(&folded, &["--date-system", "1904"], "{}");
+    let (code, _, err) = run(&folded, &["--locale", "es"], "{}");
     assert_eq!(code, 1);
     assert!(err.contains("--no-fold"), "{err}");
 
+    // With --no-fold the locale (the user's regional settings) is free.
     let open = build_loan("loan.ods", dir.path(), &["--no-fold"]);
-    let (code, _, err) = run(&open, &["--date-system", "1904", "--locale", "es"], "{}");
+    let (code, _, err) = run(&open, &["--locale", "es"], "{}");
     assert_eq!(code, 0, "{err}");
+
+    // Date system, iteration, search settings and dialect belong to the
+    // document: no flag, at build time or run time.
+    for flag in [
+        ["--date-system", "1904"],
+        ["--iterate", "5"],
+        ["--dialect", "ods"],
+        ["--search", "regex"],
+    ] {
+        let (code, _, err) = run(&open, &flag, "{}");
+        assert_eq!(code, 2, "{flag:?}: {err}");
+        assert!(err.contains("defined by the document"), "{err}");
+        let (code, _, err) = run(
+            Path::new(XLSLANG),
+            &[
+                "build",
+                asset("loan.xlsx").to_str().unwrap(),
+                flag[0],
+                flag[1],
+            ],
+            "",
+        );
+        assert_eq!(code, 2, "{flag:?}: {err}");
+    }
+    // `calc` has no document, so it accepts them.
+    let (code, out, _) = run(
+        Path::new(XLSLANG),
+        &["calc", "=DATE(1900,1,1)", "--date-system", "1899"],
+        "",
+    );
+    assert_eq!((code, out.trim()), (0, "2"));
 }
 
 #[test]

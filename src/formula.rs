@@ -28,7 +28,7 @@ impl ParseCtx<'_> {
     fn sheet_id(&self, name: &str) -> Option<u16> {
         self.sheets
             .iter()
-            .position(|s| s.eq_ignore_ascii_case(name))
+            .position(|s| addr::same_name(s, name))
             .map(|i| i as u16)
     }
 }
@@ -469,7 +469,7 @@ impl Parser<'_, '_> {
             .ctx
             .names
             .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(text))
+            .find(|(k, _)| addr::same_name(k, text))
             .map(|(_, v)| v.clone());
         match found {
             Some(def) if self.depth < 8 => parse_depth(&def, self.ctx, self.diags, self.depth + 1)

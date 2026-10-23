@@ -25,6 +25,7 @@ pub fn load(path: &Path) -> Result<Model, String> {
 
 pub fn from_workbook(wb: &Workbook, dialect: Ns) -> Model {
     let mut m = Model::new(dialect);
+    m.from_file = true;
     m.date_system = match (wb.date1904, dialect) {
         (true, _) => DateSystem::Excel1904,
         // OpenDocument's default null date is 1899-12-30 on the real calendar.

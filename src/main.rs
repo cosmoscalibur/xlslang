@@ -21,11 +21,13 @@ USAGE
 
 BUILD OPTIONS
   --no-fold            keep every reachable formula (allows run-time overrides of
-                       date system / iteration / locale)
+                       locale)
   --runtime PATH       runtime stub to embed into (default: xlslang-rt next to
                        this binary, else this binary)
-  --date-system 1900|1904   --iterate[=N[,EPS]]   --locale en|es|de|fr
-  --now SERIAL   --seed N
+  --locale en|es   --now SERIAL   --seed N
+  The date system, iteration, search settings and dialect come from the
+  document and are not options. `calc` has no document and accepts
+  --date-system 1899|1900|1904, --dialect core|xlsx|ods and --iterate[=N[,EPS]].
 
 Executables accept the runtime options; run them with --help-runtime-style
 flags: --input, --serve, --pretty, --info.";
@@ -93,15 +95,11 @@ fn spec_from(args: &mut Args) -> Result<(Spec, xlslang::Overrides), Fail> {
     let spec = Spec {
         inputs,
         outputs,
-        date_system: o.date_system,
-        dialect: o.dialect,
-        iteration: o.iteration.flatten(),
         locale: o.locale.clone(),
-        locale_from_document: o.locale_from_document,
-        search: search_from(&o),
         now: o.now,
         rand_seed: o.rand_seed,
         fold,
+        ..Spec::default()
     };
     Ok((spec, o))
 }
@@ -199,6 +197,7 @@ fn run(mut args: Args) -> Result<i32, Fail> {
 }
 
 fn calc(mut args: Args) -> Result<i32, Fail> {
+    let flags = cli::parse_model_flags(&mut args)?;
     let o = parse_overrides(&mut args)?;
     let [formula] = args.0.as_slice() else {
         return Err(Fail::Usage("calc needs exactly one formula".into()));
@@ -208,12 +207,10 @@ fn calc(mut args: Args) -> Result<i32, Fail> {
     m.set_formula(s, "A1", formula);
     let spec = Spec {
         outputs: vec![BindingSpec::parse("Sheet1!A1")],
-        date_system: o.date_system,
-        dialect: o.dialect,
-        iteration: o.iteration.flatten(),
+        date_system: flags.date_system,
+        dialect: flags.dialect,
+        iteration: flags.iteration,
         locale: o.locale.clone(),
-        locale_from_document: o.locale_from_document,
-        search: search_from(&o),
         now: o.now,
         rand_seed: o.rand_seed,
         ..Spec::default()
@@ -268,17 +265,4 @@ fn inspect(args: Args) -> Result<i32, Fail> {
         println!("diagnostic: {d}");
     }
     Ok(0)
-}
-
-/// Search settings forced on the command line; unset parts come from the file.
-fn search_from(o: &xlslang::Overrides) -> Option<xlslang::options::Search> {
-    (o.search_mode.is_some() || o.case_sensitive.is_some() || o.whole_cell.is_some()).then(|| {
-        xlslang::options::Search {
-            mode: o
-                .search_mode
-                .unwrap_or(xlslang::options::SearchMode::Wildcards),
-            whole_cell: o.whole_cell.unwrap_or(true),
-            case_sensitive: o.case_sensitive.unwrap_or(false),
-        }
-    })
 }

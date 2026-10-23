@@ -335,7 +335,7 @@ mod tests {
         // Text dates follow the locale.
         assert_eq!(parse_number("3/1/2024", &en, s), Some(45352.0)); // March 1st
         assert_eq!(parse_number("3/1/2024", &es, s), Some(45294.0)); // January 3rd
-        assert_eq!(parse_number("3.1.2024", &Locale::de_de(), s), Some(45294.0));
+        assert_eq!(parse_number("3.1.2024", &es, s), Some(45294.0));
         assert_eq!(parse_number("1 Mar 2024", &en, s), Some(45352.0));
         assert_eq!(parse_number("March 1, 2024", &en, s), Some(45352.0));
         assert_eq!(parse_number("1 marzo 2024", &es, s), Some(45352.0));

@@ -155,15 +155,36 @@ pub fn compare(a: &Value, b: &Value, case_sensitive: bool) -> Ordering {
     }
 }
 
+/// Text order as a spreadsheet collator gives it (English/Spanish): letters
+/// compare first by their base letter (`á` sorts with `a`, `abc` < `ABD` <
+/// `abd`), then accents (`a` < `á`), and only then case. This variant ignores
+/// case entirely; [`cmp_text_cs`] adds it as the last tie-break.
 pub fn cmp_text(x: &str, y: &str) -> Ordering {
-    x.chars()
-        .flat_map(char::to_lowercase)
-        .cmp(y.chars().flat_map(char::to_lowercase))
+    let key = |s: &str| s.chars().map(|c| base_letter(c).0).collect::<Vec<_>>();
+    key(x).cmp(&key(y)).then_with(|| {
+        let acc = |s: &str| s.chars().map(|c| base_letter(c).1).collect::<Vec<_>>();
+        acc(x).cmp(&acc(y))
+    })
 }
 
-/// Case-sensitive text order as a collator gives it: letters compare first
-/// ignoring case (`abc` < `ABD`), and only when equal does case decide, with
-/// lowercase first (`a` < `A`).
+const ACCENTED: &str = "àáâãäåçèéêëìíîïñòóôõöùúûüýÿ";
+const BASE: &str = "aaaaaaceeeeiiiinooooouuuuyy";
+
+/// Lowercase base letter and accent rank (0 = none) of a character.
+fn base_letter(c: char) -> (char, u8) {
+    let mut it = c.to_lowercase();
+    let l = match (it.next(), it.next()) {
+        (Some(l), None) => l,
+        _ => c,
+    };
+    match ACCENTED.chars().position(|a| a == l) {
+        Some(i) => (BASE.chars().nth(i).unwrap_or(l), i as u8 + 1),
+        None => (l, 0),
+    }
+}
+
+/// Case-sensitive order: everything [`cmp_text`] looks at first, and only when
+/// equal does case decide, lowercase first (`a` < `A`).
 pub fn cmp_text_cs(x: &str, y: &str) -> Ordering {
     cmp_text(x, y).then_with(|| {
         for (a, b) in x.chars().zip(y.chars()) {
@@ -177,4 +198,25 @@ pub fn cmp_text_cs(x: &str, y: &str) -> Ordering {
         }
         Ordering::Equal
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collation() {
+        assert_eq!(
+            cmp_text("á", "b"),
+            Ordering::Less,
+            "accents do not jump past letters"
+        );
+        assert_eq!(cmp_text("a", "á"), Ordering::Less);
+        assert_eq!(cmp_text("ABC", "abc"), Ordering::Equal);
+        assert_eq!(cmp_text_cs("abc", "ABD"), Ordering::Less);
+        assert_eq!(cmp_text_cs("a", "A"), Ordering::Less);
+        // ñ is n with a tilde here (English); Spanish makes it a letter after n.
+        assert_eq!(cmp_text("ña", "nb"), Ordering::Less);
+        assert_eq!(cmp_text("Ñandú", "ñANDÚ"), Ordering::Equal);
+    }
 }

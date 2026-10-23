@@ -269,25 +269,13 @@ fn run_time_options_and_folding() {
         json!("1.234,50 0,5")
     );
 
+    // The date system is not a run-time choice: it is the document's (build
+    // time, for a model with no file behind it).
     let m = sheet(&[("A1", json!("=DATE(2024,1,1)"))]);
-    let (p, _) = build(
-        &m,
-        &Spec {
-            fold: false,
-            ..spec(&[], &["A1"])
-        },
-    );
-    let o = Overrides {
-        date_system: Some(xlslang::options::DateSystem::Excel1904),
-        ..Default::default()
-    };
+    let (p, _) = build(&m, &spec(&[], &["A1"]));
     assert_eq!(
         p.execute(&Json::Null, &Overrides::default()).unwrap()["Sheet1!A1"],
         json!(45292)
-    );
-    assert_eq!(
-        p.execute(&Json::Null, &o).unwrap()["Sheet1!A1"],
-        json!(43830)
     );
 }
 

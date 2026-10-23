@@ -85,19 +85,25 @@ unknown keys are rejected.
 
 ### Execution options
 
-| Option | Build (`build`/`run`) | Run (executable) |
-| ------ | --------------------- | ---------------- |
-| `--date-system 1899\|1900\|1904` | default: from the file | only with `--no-fold` builds |
-| `--dialect core\|xlsx\|ods` | default: from the file extension | only with `--no-fold` builds |
-| `--iterate[=N[,EPS]]` / `--no-iterate` | default: what the document stores (`#CIRC!` if off) | only with `--no-fold` builds |
-| `--locale en\|es\|de\|fr\|document` | default: `en` (not the document's language, see FIDELITY.md) | only with `--no-fold` builds |
-| `--search wildcards\|regex\|literal`, `--case-sensitive`, `--whole-cell` | default: from the ODS settings (Excel behavior for XLSX) | only with `--no-fold` builds |
-| `--now SERIAL`, `--seed N` | fixes `NOW()/TODAY()` and `RAND()` | always |
-| `--no-fold` | keep every reachable formula | — |
+**The document decides** date system (`date1904` / `table:null-date`),
+iterative calculation (`calcPr` / `table:iteration`), search settings (regular
+expressions, wildcards, whole cell, case sensitivity: ODS) and dialect (the
+file extension). There is no command-line flag for them in `build`, `run` or
+compiled executables, and a flag given anyway is an error: the engine is
+faithful to what the file says. (`calc`, which has no file, accepts
+`--date-system 1899|1900|1904`, `--dialect` and `--iterate[=N[,EPS]]`; so does
+the library for models built in memory.)
 
-Build-time folding consumes the date system, dialect, iteration settings and locale, so
-overriding them on a folded program is refused with an explanation instead of
-silently mixing configurations.
+**The command line decides what a file cannot say:**
+
+| Option | Meaning |
+| ------ | ------- |
+| `--locale en\|es` | The user's regional settings: decimal/group separators, date order of text dates, month and day names, boolean names. Default `en`. The document's *language* is informational and does not change evaluation (LibreOffice evaluates an `es-ES` document with the system locale). |
+| `--now SERIAL`, `--seed N` | Fix `NOW()`/`TODAY()` and `RAND()`. |
+| `--no-fold` | Keep every reachable formula, so the locale can still be chosen when the compiled program runs. |
+
+Build-time folding consumes the locale, so changing it on a folded program is
+refused with an explanation instead of silently mixing configurations.
 
 ## Function support
 

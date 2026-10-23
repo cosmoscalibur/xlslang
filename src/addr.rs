@@ -72,6 +72,14 @@ impl Rect {
     }
 }
 
+/// Sheet, defined-name and function names are case-insensitive, for every
+/// script (`Hoja Ñ` and `HOJA ñ` are the same sheet).
+pub fn same_name(a: &str, b: &str) -> bool {
+    a.chars()
+        .flat_map(char::to_lowercase)
+        .eq(b.chars().flat_map(char::to_lowercase))
+}
+
 /// Column letters to a 0-based index (`A` → 0). `None` unless 1–3 ASCII letters
 /// within `XFD`.
 pub fn col_index(s: &str) -> Option<u32> {

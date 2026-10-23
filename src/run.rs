@@ -2,8 +2,8 @@
 
 use crate::addr::{CellRef, Rect};
 use crate::engine::Engine;
-use crate::ir::{Binding, Ns, Program};
-use crate::options::{DateSystem, EngineOptions, Iteration, Locale, SearchMode};
+use crate::ir::{Binding, Program};
+use crate::options::{EngineOptions, Locale};
 use crate::value::{ErrorKind, Value};
 use serde_json::{Map, Number, Value as Json};
 use std::sync::Arc;
@@ -23,19 +23,13 @@ fn fail<T>(msg: impl Into<String>) -> Result<T, RunError> {
     Err(RunError(msg.into()))
 }
 
-/// Run-time overrides of the options baked into the program.
+/// Run-time choices. Only what the document cannot express is open: the date
+/// system, iteration, search settings and dialect are the file's and cannot be
+/// overridden; the locale (the user's regional settings), the clock and the
+/// random seed are not stored in a file.
 #[derive(Debug, Clone, Default)]
 pub struct Overrides {
-    pub date_system: Option<DateSystem>,
-    /// `Some(None)` disables iteration.
-    pub iteration: Option<Option<Iteration>>,
     pub locale: Option<Locale>,
-    /// `--locale document`: take the locale from the document's language.
-    pub locale_from_document: bool,
-    pub dialect: Option<Ns>,
-    pub search_mode: Option<SearchMode>,
-    pub case_sensitive: Option<bool>,
-    pub whole_cell: Option<bool>,
     pub now: Option<f64>,
     pub rand_seed: Option<u64>,
 }
@@ -45,39 +39,18 @@ impl Program {
     /// consumed would silently mix two configurations, so it is rejected.
     pub fn effective_options(&self, o: &Overrides) -> Result<EngineOptions, RunError> {
         let mut opts = self.options.clone();
-        if let Some(d) = o.date_system {
-            opts.date_system = d;
-        }
-        if let Some(i) = o.iteration {
-            opts.iteration = i;
-        }
         if let Some(l) = &o.locale {
             opts.locale = l.clone();
         }
-        if let Some(m) = o.search_mode {
-            opts.search.mode = m;
-        }
-        if let Some(c) = o.case_sensitive {
-            opts.search.case_sensitive = c;
-        }
-        if let Some(w) = o.whole_cell {
-            opts.search.whole_cell = w;
-        }
-        if let Some(d) = o.dialect {
-            opts.dialect = d;
-        }
         opts.now = o.now.or(opts.now);
         opts.rand_seed = o.rand_seed.or(opts.rand_seed);
+        // Folding consumed the locale; overriding it would mix configurations.
         if let Some(f) = &self.folded_with
-            && (f.date_system != opts.date_system
-                || f.iteration != opts.iteration
-                || f.locale != opts.locale
-                || f.dialect != opts.dialect
-                || f.search != opts.search)
+            && f.locale != opts.locale
         {
             return fail(
-                "date system, dialect, search settings, iteration and locale were fixed when the program was built \
-                 (constants were folded with them); rebuild with --no-fold to change them at run time",
+                "the locale was fixed when the program was built (constants were folded with \
+                 it); rebuild with --no-fold to change it at run time",
             );
         }
         Ok(opts)

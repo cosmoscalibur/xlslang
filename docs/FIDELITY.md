@@ -47,13 +47,13 @@ resolved into engine options by the loader:
 
 | Setting | XLSX | ODS | Engine |
 | ------- | ---- | --- | ------ |
-| Iterative calculation | `calcPr iterate/iterateCount/iterateDelta` | `table:iteration status/steps/maximum-difference` | `iteration`, applied when the document switches it on; `--iterate`/`--no-iterate` override. |
+| Iterative calculation | `calcPr iterate/iterateCount/iterateDelta` | `table:iteration status/steps/maximum-difference` | `iteration`, applied when the document switches it on; not overridable. |
 | Search criteria: wildcards / regular expressions / literal | — (Excel: wildcards) | `table:use-wildcards`, `table:use-regular-expressions` | `search.mode`. ODF defaults for what the file omits: regular expressions **on**, wildcards off (LibreOffice omits an attribute equal to the default; verified by saving a document with regex on). Wildcards win when both are on. |
 | Whole-cell matching | — (Excel: whole cell) | `table:search-criteria-must-apply-to-whole-cell` (default true) | `search.whole_cell`. |
 | Case sensitivity | — (Excel: insensitive) | `table:case-sensitive` (default true) | `search.case_sensitive`, **comparison operators only**: with it on, `"a"="A"` is false and `"abc"<"ABD"` is true (letters first, case as tie-break, lowercase first). `COUNTIF`, `MATCH`, `VLOOKUP`, `SEARCH` stay case-insensitive: LibreOffice returns 3 for `COUNTIF(r,"APPLE")` over `apple` cells with the setting on. |
 | Two-digit-year window | — | `table:null-year` | `Locale::two_digit_year_start` (default 1930): text dates and LibreOffice `DATE(yy,…)`. |
 | Precision as shown | `fullPrecision="0"` | `table:precision-as-shown` | Not applied; the loader adds a diagnostic. |
-| Document language | — | default cell style `fo:language`/`fo:country` | Read, **not** used by default (see below). |
+| Document language | — | default cell style `fo:language`/`fo:country` | Read; informational only (see below). |
 
 Regular-expression behavior reproduced from LibreOffice: criteria are
 anchored when whole-cell matching is on; an **empty match is not a hit**
@@ -64,22 +64,43 @@ ICU's for common patterns; look-around and back-references are not supported.
 Excel files carry none of the search settings, so XLSX uses Excel's behavior
 (wildcards, whole cell, case-insensitive).
 
-### Locale and text conversion
+### Who decides what
 
-Which spelling of a text date or number is valid depends on the user's regional
-settings, **not** on the file: LibreOffice, given a document whose default cell
-style says `es-ES`, still reads `"3/1/2024"` as March 1st on an en-US system
-(verified: recalculating a probe document with its language switched to
-`es-ES`). So the engine defaults to `en` and does not take the document's
-language; `--locale es|de|fr|en` selects the locale explicitly and
-`--locale document` uses the document's language when the author's regional
-settings are known to match it.
+| Decided by | What |
+| ---------- | ---- |
+| The document | Date system, iteration, search settings (ODS), two-digit-year window, dialect (extension). The command line cannot override them. |
+| The user (`--locale`) | Regional settings: separators, date order of text dates, month/day names, boolean names. |
+| Nobody (informational) | The document's language (`fo:language`/`fo:country` of the default cell style). |
 
-A locale fixes the date order of numeric text dates (`3/1/2024` is March 1st
-under `en`, January 3rd under `es`/`de`/`fr`; a four-digit first component is
-always year-first), month names (the locale's and English), decimal and group
-separators, boolean names and `TEXT` day/month names. Times (`13:30`,
-`1:30 PM`) and date-times parse in every locale.
+The language is not an input to evaluation. Evidence: a probe document
+recalculated by LibreOffice with its default style switched to `es-ES` still gave
+`TEXT(DATE(2024,3,1),"mmmm dddd")` = `March Friday`, `TRUE&""` = `1`,
+`1.5&""` = `1.5`, `DATEVALUE("3/1/2024")` = March 1st and `VALUE("1,5")` = error:
+LibreOffice evaluates with the system regional settings, as Excel does, and a
+file does not store them. The compiler therefore reports the language as a
+diagnostic when it differs from the locale in use, and nothing more.
+
+### Locale support
+
+Only `en` and `es` are built in, because those are the two whose behavior can be
+checked here with sense. A locale fixes the date order of numeric text dates
+(`3/1/2024` is March 1st under `en`, January 3rd under `es`; a four-digit first
+component is always year-first), month names (the locale's and English),
+decimal and group separators, boolean names and `TEXT` day/month names. Times
+(`13:30`, `1:30 PM`) and date-times parse in every locale.
+
+Text order (`<`, `>`, sorted lookups) ignores accents at the first level
+(`á` sorts with `a`), then compares accents, then case. Spanish traditional
+order, where `ñ` is its own letter after `n`, is not modeled.
+
+### Case
+
+Function, sheet and defined names are case-insensitive in both applications
+(`sum`, `SUM`, `Sheet1`, `sheet1`, `HOJA ñ` = `Hoja Ñ`; compared with Unicode
+lowercase). That is unrelated to the **case-sensitive** document setting, which
+is about comparing text *values*: Excel has no such setting (`=` is always
+case-insensitive; `EXACT` is the case-sensitive test), LibreOffice has one and it
+only governs the comparison operators, as described above.
 
 ## Cached values read from the files (reader fidelity)
 
@@ -110,7 +131,7 @@ Fidelity also depends on reading what the file stores, not on a convention:
 | `CHAR(160)` and other code-page characters | LibreOffice yields U+FFFD for the 128–255 range; the engine returns the Unicode character. |
 | Regular expressions beyond Rust `regex` syntax (look-around, back-references) | LibreOffice uses ICU; such patterns match nothing in the engine. |
 | Ordering of booleans in `MATCH`/sorted lookups | Excel ordering in every dialect. |
-| Text dates in locales other than the four built in, other date spellings per locale (`d.M.yy` variants, localized month abbreviations with dots) | Not covered; use ISO or a supported pattern. |
+| Locales other than `en` and `es`; other date spellings per locale (localized month abbreviations with dots) | Not covered; use ISO or a supported pattern. |
 | Excel's own `DATEDIF(…,"MD")` result | Pinned to the LibreOffice-verified formula; not checked against Excel. |
 | Excel-only dynamic arrays (`FILTER`, `SORT`, spill) and `LET`/`LAMBDA` | Not implemented. |
 | `table:precision-as-shown` / `fullPrecision="0"` | Not applied (diagnostic emitted). |

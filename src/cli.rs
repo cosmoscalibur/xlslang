@@ -1,7 +1,7 @@
 //! Command-line plumbing shared by the compiler binary and the runtime stub.
 
 use crate::ir::Program;
-use crate::options::{DateSystem, Iteration, Locale, SearchMode};
+use crate::options::{DateSystem, Iteration, Locale};
 use crate::run::Overrides;
 use std::io::{BufRead, Read, Write};
 
@@ -80,54 +80,63 @@ pub fn parse_iteration(args: &mut Args) -> Result<Option<Iteration>, String> {
 }
 
 pub fn parse_locale(s: &str) -> Result<Locale, String> {
-    Locale::by_tag(s).ok_or_else(|| format!("unknown locale `{s}` (built in: en, es, de, fr)"))
+    Locale::by_tag(s).ok_or_else(|| format!("unknown locale `{s}` ({})", locale_help()))
 }
 
-/// Parse the options shared by build time and run time.
-pub fn parse_overrides(args: &mut Args) -> Result<Overrides, String> {
-    let mut o = Overrides::default();
+/// Options for a formula that has no file behind it (`calc`): what a document
+/// would otherwise define.
+#[derive(Debug, Default)]
+pub struct ModelFlags {
+    pub date_system: Option<DateSystem>,
+    pub dialect: Option<crate::ir::Ns>,
+    pub iteration: Option<Iteration>,
+}
+
+pub fn parse_model_flags(args: &mut Args) -> Result<ModelFlags, String> {
+    let mut f = ModelFlags::default();
     if let Some(v) = args.value("--date-system")? {
-        o.date_system = Some(parse_date_system(&v)?);
-    }
-    if args.flag("--no-iterate") {
-        o.iteration = Some(None);
-    } else if let Some(it) = parse_iteration(args)? {
-        o.iteration = Some(Some(it));
+        f.date_system = Some(parse_date_system(&v)?);
     }
     if let Some(v) = args.value("--dialect")? {
-        o.dialect = Some(
+        f.dialect = Some(
             crate::ir::Ns::parse(&v)
                 .ok_or_else(|| format!("--dialect must be core, xlsx or ods, got `{v}`"))?,
         );
     }
-    if let Some(v) = args.value("--search")? {
-        o.search_mode = Some(match v.as_str() {
-            "wildcards" => SearchMode::Wildcards,
-            "regex" => SearchMode::Regex,
-            "literal" => SearchMode::Literal,
-            _ => {
-                return Err(format!(
-                    "--search must be wildcards, regex or literal, got `{v}`"
-                ));
-            }
-        });
-    }
-    if args.flag("--case-sensitive") {
-        o.case_sensitive = Some(true);
-    } else if args.flag("--case-insensitive") {
-        o.case_sensitive = Some(false);
-    }
-    if args.flag("--whole-cell") {
-        o.whole_cell = Some(true);
-    } else if args.flag("--partial-cell") {
-        o.whole_cell = Some(false);
-    }
-    if let Some(v) = args.value("--locale")? {
-        if v == "document" {
-            o.locale_from_document = true;
-        } else {
-            o.locale = Some(parse_locale(&v)?);
+    f.iteration = parse_iteration(args)?;
+    Ok(f)
+}
+
+/// Flags that a document defines; rejected whenever a file is involved.
+pub const FILE_DEFINED_FLAGS: [&str; 5] = [
+    "--date-system",
+    "--dialect",
+    "--iterate",
+    "--no-iterate",
+    "--search",
+];
+
+pub fn locale_help() -> &'static str {
+    "built in: en, es"
+}
+
+/// Options for build and run time: the user's locale, the clock, the seed.
+pub fn parse_overrides(args: &mut Args) -> Result<Overrides, String> {
+    for f in FILE_DEFINED_FLAGS {
+        if args
+            .0
+            .iter()
+            .any(|a| a == f || a.starts_with(&format!("{f}=")))
+        {
+            return Err(format!(
+                "{f} is defined by the document (date system, iteration, search settings and dialect come from the file); \
+                 it is not a command-line option here"
+            ));
         }
+    }
+    let mut o = Overrides::default();
+    if let Some(v) = args.value("--locale")? {
+        o.locale = Some(parse_locale(&v)?);
     }
     if let Some(v) = args.value("--now")? {
         o.now = Some(
@@ -163,10 +172,8 @@ Options:
   --serve              read one JSON object per line, answer one per line
   --pretty             indent the JSON output
   --info               describe the inputs and outputs of this program
-  --date-system 1899|1900|1904   --dialect core|xlsx|ods   --iterate[=N[,EPS]] | --no-iterate
-  --locale en|es|de|fr|document      --now SERIAL   --seed N
-  --search wildcards|regex|literal   --case-sensitive|--case-insensitive
-  --whole-cell|--partial-cell";
+  --locale en|es   --now SERIAL   --seed N
+  (date system, iteration, search settings and dialect come from the document)";
 
 /// Execute a program according to command-line arguments. Returns the exit
 /// code: 0 on success, 1 on a failed run, 2 on bad arguments.
