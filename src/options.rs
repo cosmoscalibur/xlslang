@@ -239,15 +239,6 @@ impl Default for EngineOptions {
 
 impl EngineOptions {
     /// Whether booleans behave as the numbers 1/0 (LibreOffice).
-    /// Text ordering for this locale; `case_sensitive` only where the setting
-    /// applies (comparison operators).
-    pub fn collation(&self, case_sensitive: bool) -> crate::value::Collation {
-        crate::value::Collation {
-            case_sensitive,
-            spanish: self.locale.tag.starts_with("es"),
-        }
-    }
-
     pub fn bool_is_number(&self) -> bool {
         self.dialect == Ns::Ods
     }

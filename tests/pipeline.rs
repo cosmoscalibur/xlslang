@@ -225,49 +225,77 @@ fn dynamic_references_resolve_at_run_time() {
 }
 
 #[test]
-fn run_time_options_and_folding() {
+fn locale_is_static_unless_left_open() {
     let m = sheet(&[
         ("A1", json!(1234.5)),
         ("B1", json!("=TEXT(A1,\"#,##0.00\")&\" \"&(1/2)")),
+        ("C1", json!("=A1*2")),
     ]);
-    // Folded at build time: overriding the locale later must be refused.
-    let (p, _) = build(&m, &spec(&[], &["B1"]));
     let es = Overrides {
         locale: Some(Locale::es_es()),
         ..Default::default()
     };
-    assert!(
-        p.execute(&Json::Null, &es)
-            .unwrap_err()
-            .0
-            .contains("--no-fold")
-    );
+    let key = "Sheet1!B1";
 
-    // Built with the locale: baked in.
+    // Default: the locale is fixed at build time (folded or not) and a run-time
+    // choice is refused.
+    for fold in [true, false] {
+        let (p, _) = build(
+            &m,
+            &Spec {
+                fold,
+                ..spec(&[], &["B1"])
+            },
+        );
+        assert!(!p.locale_open);
+        assert!(
+            p.execute(&Json::Null, &es)
+                .unwrap_err()
+                .0
+                .contains("--runtime-locale")
+        );
+        assert_eq!(
+            p.execute(&Json::Null, &Overrides::default()).unwrap()[key],
+            json!("1,234.50 0.5")
+        );
+    }
+
+    // Chosen at build time: baked in.
     let mut s = spec(&[], &["B1"]);
     s.locale = Some(Locale::es_es());
     let (p, _) = build(&m, &s);
     assert_eq!(
-        p.execute(&Json::Null, &Overrides::default()).unwrap()["Sheet1!B1"],
+        p.execute(&Json::Null, &Overrides::default()).unwrap()[key],
         json!("1.234,50 0,5")
     );
 
-    // Not folded: the locale and date system are free at run time.
-    let (p, _) = build(
+    // Left open, formulas still folded: the locale-sensitive formula stays live
+    // and follows the run-time locale; the numeric one is folded.
+    let s = Spec {
+        locale_runtime: true,
+        ..spec(&[], &["B1", "C1"])
+    };
+    let (p, r) = build(&m, &s);
+    assert!(p.locale_open);
+    assert_eq!(r.formulas_kept, 1, "only the text formula remains live");
+    assert_eq!(
+        p.execute(&Json::Null, &Overrides::default()).unwrap()[key],
+        json!("1,234.50 0.5")
+    );
+    let out = p.execute(&Json::Null, &es).unwrap();
+    assert_eq!(out[key], json!("1.234,50 0,5"));
+    assert_eq!(out["Sheet1!C1"], json!(2469));
+
+    // Formulas unfolded and locale static are independent choices.
+    let (p, r) = build(
         &m,
         &Spec {
             fold: false,
-            ..spec(&[], &["B1"])
+            ..spec(&[], &["C1"])
         },
     );
-    assert_eq!(
-        p.execute(&Json::Null, &Overrides::default()).unwrap()["Sheet1!B1"],
-        json!("1,234.50 0.5")
-    );
-    assert_eq!(
-        p.execute(&Json::Null, &es).unwrap()["Sheet1!B1"],
-        json!("1.234,50 0,5")
-    );
+    assert_eq!(r.formulas_kept, 1);
+    assert!(!p.locale_open);
 
     // The date system is not a run-time choice: it is the document's (build
     // time, for a model with no file behind it).

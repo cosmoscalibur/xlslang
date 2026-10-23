@@ -152,14 +152,16 @@ fn serve_mode_answers_line_by_line() {
 #[test]
 fn run_time_options_are_only_what_a_file_cannot_say() {
     let dir = tempfile::tempdir().unwrap();
-    // The locale is folded into a default build: changing it later is refused.
-    let folded = build_loan("loan.xlsx", dir.path(), &[]);
-    let (code, _, err) = run(&folded, &["--locale", "es"], "{}");
-    assert_eq!(code, 1);
-    assert!(err.contains("--no-fold"), "{err}");
+    // The locale is fixed at build time by default, with or without --no-fold.
+    for extra in [&[][..], &["--no-fold"][..]] {
+        let fixed = build_loan("loan.xlsx", dir.path(), extra);
+        let (code, _, err) = run(&fixed, &["--locale", "es"], "{}");
+        assert_eq!(code, 1);
+        assert!(err.contains("--runtime-locale"), "{err}");
+    }
 
-    // With --no-fold the locale (the user's regional settings) is free.
-    let open = build_loan("loan.ods", dir.path(), &["--no-fold"]);
+    // Left open, the user's regional settings are chosen when it runs.
+    let open = build_loan("loan.ods", dir.path(), &["--runtime-locale"]);
     let (code, _, err) = run(&open, &["--locale", "es"], "{}");
     assert_eq!(code, 0, "{err}");
 

@@ -4,7 +4,8 @@ use super::{Reg, VAR, num, opt};
 use crate::coerce;
 use crate::engine::{Engine, Res};
 use crate::matching::Matcher;
-use crate::value::{Array, Collation, ErrorKind, Value, cmp_text, compare};
+use crate::value::Coll;
+use crate::value::{Array, ErrorKind, Value, compare};
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -78,7 +79,8 @@ pub(super) fn register(r: &mut Reg) {
     r.eager("COUNTIF", 2, 2, |e, a| {
         let crit = Criterion::new(e, &a[1])?;
         let arr = e.array_of(a[0].clone());
-        num(arr.data.iter().filter(|v| crit.matches(v)).count() as f64)
+        let coll = e.collator(false);
+        num(arr.data.iter().filter(|v| crit.matches(v, coll)).count() as f64)
     });
     r.eager("SUMIFS", 3, VAR, |e, a| multi(e, a, Agg::Sum));
     r.eager("AVERAGEIFS", 3, VAR, |e, a| multi(e, a, Agg::Avg));
@@ -92,7 +94,7 @@ pub(super) fn register(r: &mut Reg) {
             }
             conds.push((e.array_of(p[0].clone()), Criterion::new(e, &p[1])?));
         }
-        let n = matching(&conds)?.len();
+        let n = matching(&conds, e.collator(false))?.len();
         num(n as f64)
     });
 }
@@ -197,7 +199,7 @@ impl Criterion {
         }
     }
 
-    pub(crate) fn matches(&self, v: &Value) -> bool {
+    pub(crate) fn matches(&self, v: &Value, coll: &Coll) -> bool {
         match self {
             Self::Blank(want_blank) => {
                 let blank =
@@ -223,7 +225,7 @@ impl Criterion {
                         Some(if *cs {
                             t.as_ref().cmp(pat.as_str())
                         } else {
-                            cmp_text(t, pat, Collation::default())
+                            coll.compare(t, pat)
                         }),
                     ),
                 },
@@ -257,13 +259,13 @@ enum Agg {
 }
 
 /// Indices of the cells satisfying every `(range, criterion)` pair.
-fn matching(conds: &[(Arc<Array>, Criterion)]) -> Res<Vec<usize>> {
+fn matching(conds: &[(Arc<Array>, Criterion)], coll: &Coll) -> Res<Vec<usize>> {
     let (rows, cols) = (conds[0].0.rows, conds[0].0.cols);
     if conds.iter().any(|(r, _)| r.rows != rows || r.cols != cols) {
         return Err(ErrorKind::Value);
     }
     Ok((0..conds[0].0.data.len())
-        .filter(|&i| conds.iter().all(|(r, c)| c.matches(&r.data[i])))
+        .filter(|&i| conds.iter().all(|(r, c)| c.matches(&r.data[i], coll)))
         .collect())
 }
 
@@ -295,7 +297,7 @@ fn conditional(e: &mut Engine, a: &[Value], agg: Agg) -> Res<Value> {
     if vals.data.len() != range.data.len() {
         return Err(ErrorKind::Value);
     }
-    let idx = matching(&[(range, crit)])?;
+    let idx = matching(&[(range, crit)], e.collator(false))?;
     reduce(&vals, &idx, agg)
 }
 
@@ -311,17 +313,17 @@ fn multi(e: &mut Engine, a: &[Value], agg: Agg) -> Res<Value> {
     if conds.iter().any(|(r, _)| r.data.len() != vals.data.len()) {
         return Err(ErrorKind::Value);
     }
-    let idx = matching(&conds)?;
+    let idx = matching(&conds, e.collator(false))?;
     reduce(&vals, &idx, agg)
 }
 
 /// Shared with MATCH-style lookups.
-pub(crate) fn values_equal(a: &Value, b: &Value) -> bool {
+pub(crate) fn values_equal(a: &Value, b: &Value, coll: &Coll) -> bool {
     match (a, b) {
         // Lookups and criteria ignore case whatever the comparison setting says.
-        (Value::Text(x), Value::Text(y)) => cmp_text(x, y, Collation::default()) == Ordering::Equal,
+        (Value::Text(x), Value::Text(y)) => coll.compare(x, y) == Ordering::Equal,
         (Value::Number(_) | Value::Bool(_), Value::Text(_))
         | (Value::Text(_), Value::Number(_) | Value::Bool(_)) => false,
-        _ => compare(a, b, Collation::default()) == Ordering::Equal,
+        _ => compare(a, b, coll) == Ordering::Equal,
     }
 }

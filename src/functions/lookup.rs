@@ -6,6 +6,7 @@ use crate::addr::{self, MAX_COLS, MAX_ROWS, Rect};
 use crate::engine::{Engine, Res};
 use crate::matching::Matcher;
 use crate::options::{EngineOptions, Search};
+use crate::value::Coll;
 use crate::value::{Array, ErrorKind, Value, compare};
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -15,7 +16,7 @@ pub(super) fn register(r: &mut Reg) {
         let needle = e.scalar(a[0].clone());
         let hay = e.array_of(a[1].clone());
         let kind = opt_num(e, a, 2, 1.0)?;
-        position(&needle, &hay.data, kind, &e.opts)
+        position(&needle, &hay.data, kind, &e.opts, e.collator(false))
             .map_or(Err(ErrorKind::Na), |p| num((p + 1) as f64))
     })
     .array_args();
@@ -61,7 +62,13 @@ pub(super) fn register(r: &mut Reg) {
 
 /// Position (0-based) of `needle` in `hay` for a MATCH `kind` (0 exact,
 /// 1 largest ≤ in ascending data, -1 smallest ≥ in descending data).
-fn position(needle: &Value, hay: &[Value], kind: f64, opts: &EngineOptions) -> Option<usize> {
+fn position(
+    needle: &Value,
+    hay: &[Value],
+    kind: f64,
+    opts: &EngineOptions,
+    coll: &Coll,
+) -> Option<usize> {
     let search = &opts.search;
     if kind == 0.0 {
         if let Value::Text(p) = needle {
@@ -70,7 +77,7 @@ fn position(needle: &Value, hay: &[Value], kind: f64, opts: &EngineOptions) -> O
                 .iter()
                 .position(|v| matches!(v, Value::Text(t) if m.is_match(t)));
         }
-        return hay.iter().position(|v| values_equal(needle, v));
+        return hay.iter().position(|v| values_equal(needle, v, coll));
     }
     let same_class = |v: &Value| {
         matches!(
@@ -85,7 +92,7 @@ fn position(needle: &Value, hay: &[Value], kind: f64, opts: &EngineOptions) -> O
         if !same_class(v) {
             continue;
         }
-        let ord = compare(v, needle, opts.collation(false));
+        let ord = compare(v, needle, coll);
         let ok = if kind > 0.0 {
             ord != Ordering::Greater
         } else {
@@ -183,8 +190,14 @@ fn table_lookup(e: &mut Engine, a: &[Value], horizontal: bool) -> Res<Value> {
         }
     };
     let keys: Vec<Value> = (0..lanes).map(key).collect();
-    let pos = position(&needle, &keys, if approx { 1.0 } else { 0.0 }, &e.opts)
-        .ok_or(ErrorKind::Na)? as u32;
+    let pos = position(
+        &needle,
+        &keys,
+        if approx { 1.0 } else { 0.0 },
+        &e.opts,
+        e.collator(false),
+    )
+    .ok_or(ErrorKind::Na)? as u32;
     let k = idx as u32 - 1;
     Ok(if horizontal {
         t.get(k, pos).clone()
@@ -207,7 +220,7 @@ fn xlookup(e: &mut Engine, a: &[Value]) -> Res<Value> {
         0 => order
             .iter()
             .copied()
-            .find(|&i| values_equal(&needle, &hay.data[i])),
+            .find(|&i| values_equal(&needle, &hay.data[i], e.collator(false))),
         2 => match &needle {
             Value::Text(p) => {
                 // The explicit wildcard mode of XLOOKUP, whatever the document says.
@@ -225,7 +238,7 @@ fn xlookup(e: &mut Engine, a: &[Value]) -> Res<Value> {
             _ => order
                 .iter()
                 .copied()
-                .find(|&i| values_equal(&needle, &hay.data[i])),
+                .find(|&i| values_equal(&needle, &hay.data[i], e.collator(false))),
         },
         m @ (-1 | 1) => {
             // Exact, else nearest smaller (-1) / larger (1).
@@ -238,14 +251,14 @@ fn xlookup(e: &mut Engine, a: &[Value]) -> Res<Value> {
                 ) {
                     continue;
                 }
-                match compare(&v, &needle, e.opts.collation(false)) {
+                match compare(&v, &needle, e.collator(false)) {
                     Ordering::Equal => {
                         best = Some(i);
                         break;
                     }
                     o if (m == -1 && o == Ordering::Less) || (m == 1 && o == Ordering::Greater) => {
                         let better = best.is_none_or(|b| {
-                            let ob = compare(&v, &hay.data[b], e.opts.collation(false));
+                            let ob = compare(&v, &hay.data[b], e.collator(false));
                             if m == -1 {
                                 ob == Ordering::Greater
                             } else {

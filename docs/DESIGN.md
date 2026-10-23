@@ -110,10 +110,13 @@ intermediate computation that depends on inputs stays; the 360-row schedule
 nobody asked for is gone).
 
 The date system, iteration, search settings and dialect are the document's and
-are never overridable. Folding does consume the locale (a user choice), so a
-folded program records it (`Program::folded_with`) and refuses a run-time locale
-that would contradict it; `--no-fold` keeps everything live and lets the locale
-change per run. Who decides what is in [FIDELITY.md](FIDELITY.md#who-decides-what).
+are never overridable. The locale is the user's and is **static by default**:
+fixed at build time, so folding may use it. `--runtime-locale` leaves it open;
+then the compiler keeps live every formula that may depend on it (text
+constants, concatenation, comparisons, text/lookup/criteria functions, or a
+dependency on a text cell) and still folds the rest. `--no-fold` is a separate
+switch for build-time evaluation as a whole. Who decides what is in
+[FIDELITY.md](FIDELITY.md#who-decides-what).
 
 ## Dependency ordering: in-house, no graph library
 
@@ -189,7 +192,7 @@ a diagnostic.
 1899 = real calendar, the ODS default),
 iteration (`max_iterations`, `max_change`; Excel defaults 100 / 0.001), locale
 (decimal/group separators, boolean names, month and day names; `en` and `es`
-built in) plus fixed `now` and `rand` seed for determinism. The
+built in; text order from ICU4X collators) plus fixed `now` and `rand` seed for determinism. The
 source file's own setting (`date1904`) is the default. Locale affects text
 conversion at run time (`TEXT`, `&`, `VALUE`, `FIXED`); function *names* are not
 localized because files always store the canonical ones.

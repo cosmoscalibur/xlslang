@@ -11,7 +11,7 @@ use crate::addr::{CellRef, Rect};
 use crate::coerce;
 use crate::ir::{BinOp, CellKind, Expr, Program, UnOp};
 use crate::options::EngineOptions;
-use crate::value::{Array, ErrorKind, Value, compare};
+use crate::value::{Array, Collators, ErrorKind, Value, compare};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -45,6 +45,7 @@ pub struct Engine<'p> {
     range_cache: HashMap<Rect, Arc<Array>>,
     /// Reads that saw a cell still in flux (circular or iterating).
     unstable_reads: u64,
+    coll: Collators,
 }
 
 impl<'p> Engine<'p> {
@@ -77,6 +78,13 @@ impl<'p> Engine<'p> {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0x9E37_79B9, |d| d.as_nanos() as u64)
         });
+        let opts_lang = opts
+            .locale
+            .tag
+            .split('-')
+            .next()
+            .unwrap_or("en")
+            .to_string();
         Self {
             prog,
             opts,
@@ -90,6 +98,7 @@ impl<'p> Engine<'p> {
             array_depth: 0,
             range_cache: HashMap::new(),
             unstable_reads: 0,
+            coll: Collators::new(&opts_lang),
         }
     }
 
@@ -240,6 +249,11 @@ impl<'p> Engine<'p> {
             }
         }
         Array::new(rows, cols, data)
+    }
+
+    /// Text collator for the locale; `case_sensitive` only where a setting asks.
+    pub fn collator(&self, case_sensitive: bool) -> &crate::value::Coll {
+        self.coll.get(case_sensitive)
     }
 
     pub fn sheet_id(&self, name: &str) -> Option<u16> {
@@ -514,7 +528,7 @@ impl<'p> Engine<'p> {
                 let ord = compare(
                     &as_num(a),
                     &as_num(b),
-                    self.opts.collation(self.opts.search.case_sensitive),
+                    self.coll.get(self.opts.search.case_sensitive),
                 );
                 Value::Bool(match op {
                     BinOp::Eq => ord == Ordering::Equal,

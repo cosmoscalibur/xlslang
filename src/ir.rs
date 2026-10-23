@@ -173,9 +173,9 @@ pub struct Program {
     pub version: u32,
     pub sheets: Vec<String>,
     pub options: EngineOptions,
-    /// Options in force when constants were folded at build time. Run-time
-    /// overrides of those would make the folded values stale.
-    pub folded_with: Option<EngineOptions>,
+    /// The locale (the user's regional settings) may be chosen when the program
+    /// runs. Otherwise it is fixed: constants may have been folded with it.
+    pub locale_open: bool,
     pub cells: Vec<CellDef>,
     pub cycles: Vec<(u32, u32)>,
     pub inputs: Vec<Binding>,

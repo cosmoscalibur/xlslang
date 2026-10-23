@@ -99,11 +99,13 @@ the library for models built in memory.)
 | Option | Meaning |
 | ------ | ------- |
 | `--locale en\|es` | The user's regional settings: decimal/group separators, date order of text dates, month and day names, boolean names. Default `en`. The document's *language* is informational and does not change evaluation (LibreOffice evaluates an `es-ES` document with the system locale). |
-| `--now SERIAL`, `--seed N` | Fix `NOW()`/`TODAY()` and `RAND()`. |
-| `--no-fold` | Keep every reachable formula, so the locale can still be chosen when the compiled program runs. |
+| `--now SERIAL` | Fix `NOW()`/`TODAY()`. Default: the system clock at each run. For reproducible CI. |
+| `--seed N` | Fix the `RAND`/`RANDBETWEEN` generator. Default: seeded from the clock. For reproducible CI. |
+| `--no-fold` | Keep every reachable formula; evaluate nothing at build time. |
+| `--runtime-locale` | Leave the locale open: the executable accepts `--locale`. Formulas that may depend on it (text, comparisons, text functions, anything reading a text cell) stay live; the rest still fold. Without it the locale is fixed at build time and a run-time `--locale` is an error. |
 
-Build-time folding consumes the locale, so changing it on a folded program is
-refused with an explanation instead of silently mixing configurations.
+`--no-fold` and `--runtime-locale` are independent: all formulas kept with a
+static locale, folded formulas with an open locale, or any other combination.
 
 ## Function support
 

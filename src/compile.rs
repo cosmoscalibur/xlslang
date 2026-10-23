@@ -55,6 +55,9 @@ pub struct Spec {
     pub rand_seed: Option<u64>,
     /// Evaluate input-independent cells at build time.
     pub fold: bool,
+    /// Leave the locale open to the run-time caller. With folding on, formulas
+    /// whose result may depend on the locale are then kept live.
+    pub locale_runtime: bool,
 }
 
 impl Default for Spec {
@@ -70,6 +73,7 @@ impl Default for Spec {
             now: None,
             rand_seed: None,
             fold: true,
+            locale_runtime: false,
         }
     }
 }
@@ -348,9 +352,21 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
             if (v as usize) < n {
                 match &list[v as usize].1 {
                     CellKind::Input(_) => t = true,
-                    CellKind::Formula(_) => {
+                    CellKind::Formula(e) => {
                         let f = g.flags.get(&v);
                         t |= !spec.fold || f.is_some_and(|f| f.dynamic || f.volatile);
+                        t |= spec.locale_runtime
+                            && (locale_sensitive(e)
+                                || csr.edges(m).iter().any(|&d| {
+                                    let w = cone[d as usize];
+                                    if (w as usize) < n {
+                                        is_text_const(&list[w as usize].1)
+                                    } else {
+                                        g.rect_members[w as usize - n]
+                                            .iter()
+                                            .any(|&x| is_text_const(&list[x as usize].1))
+                                    }
+                                }));
                     }
                     CellKind::Const(_) => {}
                 }
@@ -425,7 +441,7 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
             version: PROGRAM_VERSION,
             sheets: model.sheets.clone(),
             options: opts.clone(),
-            folded_with: None,
+            locale_open: false,
             cells,
             cycles,
             inputs: Vec::new(),
@@ -520,7 +536,7 @@ pub fn compile(model: &Model, spec: &Spec) -> Result<(Program, Report), CompileE
             version: PROGRAM_VERSION,
             sheets: model.sheets.clone(),
             options: opts.clone(),
-            folded_with: spec.fold.then_some(opts),
+            locale_open: spec.locale_runtime,
             cells,
             cycles,
             inputs,
@@ -726,4 +742,71 @@ fn offset_const(args: &[Expr]) -> Option<Rect> {
     Some(Rect::new(
         base.sheet, r0 as u32, c0 as u32, r1 as u32, c1 as u32,
     ))
+}
+
+fn is_text_const(k: &CellKind) -> bool {
+    matches!(k, CellKind::Const(Value::Text(_)))
+}
+
+/// Functions that convert between text and numbers/dates or compare text, and
+/// so can give another answer under another locale.
+const LOCALE_FUNCTIONS: &[&str] = &[
+    "TEXT",
+    "VALUE",
+    "DATEVALUE",
+    "NUMBERVALUE",
+    "FIXED",
+    "TEXTJOIN",
+    "CONCAT",
+    "CONCATENATE",
+    "LEN",
+    "LEFT",
+    "RIGHT",
+    "MID",
+    "FIND",
+    "SEARCH",
+    "SUBSTITUTE",
+    "REPLACE",
+    "REPT",
+    "EXACT",
+    "MATCH",
+    "VLOOKUP",
+    "HLOOKUP",
+    "XLOOKUP",
+    "COUNTIF",
+    "COUNTIFS",
+    "SUMIF",
+    "SUMIFS",
+    "AVERAGEIF",
+    "AVERAGEIFS",
+    "MAXIFS",
+    "MINIFS",
+    "SWITCH",
+    "T",
+    "N",
+];
+
+/// Whether a formula may evaluate differently under another locale. Deliberately
+/// conservative: text constants, concatenation, comparisons, and the functions
+/// above count; so does depending on a text cell (checked by the caller).
+fn locale_sensitive(e: &Expr) -> bool {
+    let mut hit = false;
+    e.walk(&mut |x| match x {
+        Expr::Const(Value::Text(_)) | Expr::Binary(crate::ir::BinOp::Concat, ..) => hit = true,
+        Expr::Const(Value::Array(a)) => hit |= a.data.iter().any(|v| matches!(v, Value::Text(_))),
+        Expr::Binary(op, ..) => {
+            hit |= matches!(
+                op,
+                crate::ir::BinOp::Eq
+                    | crate::ir::BinOp::Ne
+                    | crate::ir::BinOp::Lt
+                    | crate::ir::BinOp::Le
+                    | crate::ir::BinOp::Gt
+                    | crate::ir::BinOp::Ge
+            );
+        }
+        Expr::Call(id, _) => hit |= LOCALE_FUNCTIONS.contains(&id.def().name),
+        _ => {}
+    });
+    hit
 }

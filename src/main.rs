@@ -20,8 +20,10 @@ USAGE
       Show what the compiler sees: sizes, unsupported functions, cycles.
 
 BUILD OPTIONS
-  --no-fold            keep every reachable formula (allows run-time overrides of
-                       locale)
+  --no-fold            keep every reachable formula (no build-time evaluation)
+  --runtime-locale     leave the locale open: the executable accepts --locale.
+                       Formulas that may depend on it stay live; the rest still
+                       fold. Without it the locale is fixed at build time.
   --runtime PATH       runtime stub to embed into (default: xlslang-rt next to
                        this binary, else this binary)
   --locale en|es   --now SERIAL   --seed N
@@ -91,6 +93,7 @@ fn spec_from(args: &mut Args) -> Result<(Spec, xlslang::Overrides), Fail> {
         .map(|s| BindingSpec::parse(s))
         .collect();
     let fold = !args.flag("--no-fold");
+    let locale_runtime = args.flag("--runtime-locale");
     let o = parse_overrides(args)?;
     let spec = Spec {
         inputs,
@@ -99,6 +102,7 @@ fn spec_from(args: &mut Args) -> Result<(Spec, xlslang::Overrides), Fail> {
         now: o.now,
         rand_seed: o.rand_seed,
         fold,
+        locale_runtime,
         ..Spec::default()
     };
     Ok((spec, o))

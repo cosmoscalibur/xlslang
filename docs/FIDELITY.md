@@ -89,11 +89,15 @@ component is always year-first), month names (the locale's and English),
 decimal and group separators, boolean names and `TEXT` day/month names. Times
 (`13:30`, `1:30 PM`) and date-times parse in every locale.
 
-Text order (`<`, `>`, sorted lookups) compares letters first (`á` sorts with
-`a`), then accents, then — for the case-sensitive comparison operators of an ODS
-document — case, lowercase first. Under `es` the `ñ` is a letter of its own
-between `n` and `o` (`"ñu">"nz"` is true); under `en` it is `n` with a tilde.
-`ch` and `ll` are not separate letters (modern Spanish order).
+Text order (`<`, `>`, sorted lookups) comes from ICU4X (CLDR) collators, the same
+data LibreOffice uses: letters first (`á` sorts with `a`), then accents, then —
+for the case-sensitive comparison operators of an ODS document — case, lowercase
+first. Under `es` the `ñ` is a letter between `n` and `o` (`"ñu">"nz"` is true);
+under `en` it is `n` with a tilde. Excel orders with Windows NLS tables, which
+agree for English and Spanish in what was checked; not verified against Excel.
+Number and date *formatting* is hand-written and tested rather than taken from
+CLDR on purpose: CLDR and Excel disagree there (e.g. Spanish does not group
+four-digit numbers in CLDR, Excel does).
 
 ### Case
 

@@ -40,19 +40,15 @@ impl Program {
     pub fn effective_options(&self, o: &Overrides) -> Result<EngineOptions, RunError> {
         let mut opts = self.options.clone();
         if let Some(l) = &o.locale {
+            if !self.locale_open {
+                return fail(
+                    "the locale was fixed when the program was built; build with --runtime-locale to choose it at run time",
+                );
+            }
             opts.locale = l.clone();
         }
         opts.now = o.now.or(opts.now);
         opts.rand_seed = o.rand_seed.or(opts.rand_seed);
-        // Folding consumed the locale; overriding it would mix configurations.
-        if let Some(f) = &self.folded_with
-            && f.locale != opts.locale
-        {
-            return fail(
-                "the locale was fixed when the program was built (constants were folded with \
-                 it); rebuild with --no-fold to change it at run time",
-            );
-        }
         Ok(opts)
     }
 
