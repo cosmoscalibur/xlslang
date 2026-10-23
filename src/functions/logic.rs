@@ -54,7 +54,7 @@ pub(super) fn register(r: &mut Reg) {
         while rest.len() >= 2 {
             let c = e.eval(&rest[0]);
             let c = e.scalar(c);
-            if compare(&x, &c, e.opts.search.case_sensitive) == Ordering::Equal
+            if compare(&x, &c, e.opts.collation(e.opts.search.case_sensitive)) == Ordering::Equal
                 && std::mem::discriminant(&x) == std::mem::discriminant(&c)
             {
                 return Ok(e.eval(&rest[1]));

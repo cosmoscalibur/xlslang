@@ -219,14 +219,40 @@ pub(super) fn register(r: &mut Reg) {
         if !(1.0..=255.0).contains(&n) {
             return Err(ErrorKind::Value);
         }
-        Ok(Value::text(char::from(n as u8).to_string()))
+        Ok(Value::text(cp1252_to_char(n as u8).to_string()))
     });
     r.eager("CODE", 1, 1, |e, a| {
         let t = e.text(&a[0])?;
         t.chars()
             .next()
-            .map_or(Err(ErrorKind::Value), |c| num(f64::from(u32::from(c))))
+            .map_or(Err(ErrorKind::Value), |c| num(f64::from(char_to_cp1252(c))))
     });
+}
+
+/// Windows-1252, the code page behind `CHAR`/`CODE` in Western-language Excel
+/// (and in LibreOffice on Windows; on a UTF-8 system LibreOffice instead yields
+/// U+FFFD for 128–255, an environment dependence the engine does not copy).
+const CP1252_HIGH: [char; 32] = [
+    '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}',
+    '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
+];
+
+fn cp1252_to_char(b: u8) -> char {
+    match b {
+        0x80..=0x9f => CP1252_HIGH[usize::from(b - 0x80)],
+        b => char::from(b),
+    }
+}
+
+fn char_to_cp1252(c: char) -> u32 {
+    if let Some(i) = CP1252_HIGH.iter().position(|&h| h == c) {
+        return 0x80 + i as u32;
+    }
+    match u32::from(c) {
+        u @ (0..=0x7f | 0xa0..=0xff) => u,
+        // Not representable in the code page: Excel gives `?`.
+        _ => 63,
+    }
 }
 
 fn count(e: &mut Engine, a: &[Value], i: usize) -> Res<usize> {

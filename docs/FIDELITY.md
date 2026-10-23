@@ -89,9 +89,11 @@ component is always year-first), month names (the locale's and English),
 decimal and group separators, boolean names and `TEXT` day/month names. Times
 (`13:30`, `1:30 PM`) and date-times parse in every locale.
 
-Text order (`<`, `>`, sorted lookups) ignores accents at the first level
-(`á` sorts with `a`), then compares accents, then case. Spanish traditional
-order, where `ñ` is its own letter after `n`, is not modeled.
+Text order (`<`, `>`, sorted lookups) compares letters first (`á` sorts with
+`a`), then accents, then — for the case-sensitive comparison operators of an ODS
+document — case, lowercase first. Under `es` the `ñ` is a letter of its own
+between `n` and `o` (`"ñu">"nz"` is true); under `en` it is `n` with a tilde.
+`ch` and `ll` are not separate letters (modern Spanish order).
 
 ### Case
 
@@ -128,8 +130,8 @@ Fidelity also depends on reading what the file stores, not on a convention:
 
 | Case | Status |
 | ---- | ------ |
-| `CHAR(160)` and other code-page characters | LibreOffice yields U+FFFD for the 128–255 range; the engine returns the Unicode character. |
-| Regular expressions beyond Rust `regex` syntax (look-around, back-references) | LibreOffice uses ICU; such patterns match nothing in the engine. |
+| `CHAR`/`CODE` above 127 | Windows-1252, as in Western Excel (and LibreOffice on Windows). LibreOffice on a UTF-8 Linux yields U+FFFD for 128–255; that is the environment, not the document, so it is not copied. Other code pages are not modeled. |
+| ICU-only regular-expression syntax | Look-around and back-references work (`fancy-regex`). Constructs specific to ICU (`\\h`, `\\R`, `\\X`, some property names) are not available; a pattern that does not compile matches nothing. |
 | Ordering of booleans in `MATCH`/sorted lookups | Excel ordering in every dialect. |
 | Locales other than `en` and `es`; other date spellings per locale (localized month abbreviations with dots) | Not covered; use ISO or a supported pattern. |
 | Excel's own `DATEDIF(…,"MD")` result | Pinned to the LibreOffice-verified formula; not checked against Excel. |

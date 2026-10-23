@@ -5,7 +5,7 @@
 //! (observed: `COUNTIF(r,"APPLE")` counts `apple` with the setting on).
 
 use crate::options::{Search, SearchMode};
-use regex::Regex;
+use fancy_regex::Regex;
 
 pub enum Matcher {
     /// No special characters: compare directly.
@@ -26,10 +26,10 @@ fn wildcard_to_regex(p: &str) -> String {
             '*' => out.push_str(".*"),
             '?' => out.push('.'),
             '~' => match it.next() {
-                Some(n) => out.push_str(&regex::escape(&n.to_string())),
+                Some(n) => out.push_str(&fancy_regex::escape(&n.to_string())),
                 None => out.push('~'),
             },
-            c => out.push_str(&regex::escape(&c.to_string())),
+            c => out.push_str(&fancy_regex::escape(&c.to_string())),
         }
     }
     out
@@ -69,6 +69,7 @@ impl Matcher {
             // An empty match (`a*` against `xyz`) is not a hit, as in LibreOffice.
             Self::Re(re) => re
                 .find_iter(text)
+                .filter_map(Result::ok)
                 .find(|m| !m.as_str().is_empty())
                 .map(|m| text[..m.start()].chars().count()),
             Self::Plain { text: p, whole } => {
@@ -103,6 +104,16 @@ mod tests {
         assert!(Matcher::new("a~*", &s(SearchMode::Wildcards, true, false), true).is_match("a*"));
         assert!(!Matcher::new("a~*", &s(SearchMode::Wildcards, true, false), true).is_match("ab"));
         assert!(!Matcher::new("a.c", &s(SearchMode::Wildcards, true, false), true).is_match("abc"));
+    }
+
+    #[test]
+    fn regex_look_around_and_backreferences() {
+        let re = s(SearchMode::Regex, true, false);
+        assert!(Matcher::new("a(?=b)b", &re, true).is_match("ab"));
+        assert!(Matcher::new("(?<!x)ab", &re, false).is_match("zab"));
+        assert!(!Matcher::new("(?<!x)ab", &re, false).is_match("xab"));
+        assert!(Matcher::new("(a)\\1", &re, true).is_match("aa"));
+        assert!(!Matcher::new("(a)\\1", &re, true).is_match("ab"));
     }
 
     #[test]

@@ -5,7 +5,7 @@ use super::{Reg, num, opt, opt_num};
 use crate::addr::{self, MAX_COLS, MAX_ROWS, Rect};
 use crate::engine::{Engine, Res};
 use crate::matching::Matcher;
-use crate::options::Search;
+use crate::options::{EngineOptions, Search};
 use crate::value::{Array, ErrorKind, Value, compare};
 use std::cmp::Ordering;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ pub(super) fn register(r: &mut Reg) {
         let needle = e.scalar(a[0].clone());
         let hay = e.array_of(a[1].clone());
         let kind = opt_num(e, a, 2, 1.0)?;
-        position(&needle, &hay.data, kind, &e.opts.search)
+        position(&needle, &hay.data, kind, &e.opts)
             .map_or(Err(ErrorKind::Na), |p| num((p + 1) as f64))
     })
     .array_args();
@@ -61,7 +61,8 @@ pub(super) fn register(r: &mut Reg) {
 
 /// Position (0-based) of `needle` in `hay` for a MATCH `kind` (0 exact,
 /// 1 largest ≤ in ascending data, -1 smallest ≥ in descending data).
-fn position(needle: &Value, hay: &[Value], kind: f64, search: &Search) -> Option<usize> {
+fn position(needle: &Value, hay: &[Value], kind: f64, opts: &EngineOptions) -> Option<usize> {
+    let search = &opts.search;
     if kind == 0.0 {
         if let Value::Text(p) = needle {
             let m = Matcher::new(p, search, search.whole_cell);
@@ -84,7 +85,7 @@ fn position(needle: &Value, hay: &[Value], kind: f64, search: &Search) -> Option
         if !same_class(v) {
             continue;
         }
-        let ord = compare(v, needle, false);
+        let ord = compare(v, needle, opts.collation(false));
         let ok = if kind > 0.0 {
             ord != Ordering::Greater
         } else {
@@ -182,13 +183,8 @@ fn table_lookup(e: &mut Engine, a: &[Value], horizontal: bool) -> Res<Value> {
         }
     };
     let keys: Vec<Value> = (0..lanes).map(key).collect();
-    let pos = position(
-        &needle,
-        &keys,
-        if approx { 1.0 } else { 0.0 },
-        &e.opts.search,
-    )
-    .ok_or(ErrorKind::Na)? as u32;
+    let pos = position(&needle, &keys, if approx { 1.0 } else { 0.0 }, &e.opts)
+        .ok_or(ErrorKind::Na)? as u32;
     let k = idx as u32 - 1;
     Ok(if horizontal {
         t.get(k, pos).clone()
@@ -242,14 +238,14 @@ fn xlookup(e: &mut Engine, a: &[Value]) -> Res<Value> {
                 ) {
                     continue;
                 }
-                match compare(&v, &needle, false) {
+                match compare(&v, &needle, e.opts.collation(false)) {
                     Ordering::Equal => {
                         best = Some(i);
                         break;
                     }
                     o if (m == -1 && o == Ordering::Less) || (m == 1 && o == Ordering::Greater) => {
                         let better = best.is_none_or(|b| {
-                            let ob = compare(&v, &hay.data[b], false);
+                            let ob = compare(&v, &hay.data[b], e.opts.collation(false));
                             if m == -1 {
                                 ob == Ordering::Greater
                             } else {

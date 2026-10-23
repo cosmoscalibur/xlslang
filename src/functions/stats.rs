@@ -4,7 +4,7 @@ use super::{Reg, VAR, num, opt};
 use crate::coerce;
 use crate::engine::{Engine, Res};
 use crate::matching::Matcher;
-use crate::value::{Array, ErrorKind, Value, cmp_text, compare};
+use crate::value::{Array, Collation, ErrorKind, Value, cmp_text, compare};
 use std::cmp::Ordering;
 use std::sync::Arc;
 
@@ -223,7 +223,7 @@ impl Criterion {
                         Some(if *cs {
                             t.as_ref().cmp(pat.as_str())
                         } else {
-                            cmp_text(t, pat)
+                            cmp_text(t, pat, Collation::default())
                         }),
                     ),
                 },
@@ -319,9 +319,9 @@ fn multi(e: &mut Engine, a: &[Value], agg: Agg) -> Res<Value> {
 pub(crate) fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
         // Lookups and criteria ignore case whatever the comparison setting says.
-        (Value::Text(x), Value::Text(y)) => cmp_text(x, y) == Ordering::Equal,
+        (Value::Text(x), Value::Text(y)) => cmp_text(x, y, Collation::default()) == Ordering::Equal,
         (Value::Number(_) | Value::Bool(_), Value::Text(_))
         | (Value::Text(_), Value::Number(_) | Value::Bool(_)) => false,
-        _ => compare(a, b, false) == Ordering::Equal,
+        _ => compare(a, b, Collation::default()) == Ordering::Equal,
     }
 }

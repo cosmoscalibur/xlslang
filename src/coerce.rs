@@ -182,9 +182,11 @@ fn parse_date_only(d: &str, loc: &Locale, sys: DateSystem) -> Option<f64> {
             return None;
         }
     }
+    // Spanish writes `1 de marzo de 2024`.
+    let spanish = loc.tag.starts_with("es");
     let toks: Vec<&str> = d
         .split(['/', '.', '-', ',', ' '])
-        .filter(|t| !t.is_empty())
+        .filter(|t| !t.is_empty() && !(spanish && t.eq_ignore_ascii_case("de")))
         .collect();
     let num = |t: &str| -> Option<i64> {
         (t.chars().all(|c| c.is_ascii_digit()) && t.len() <= 4).then(|| t.parse().ok())?

@@ -18,7 +18,7 @@ use xlslang::{BindingSpec, Model, Overrides, Spec, compile, loader};
 const NOT_REPRODUCED: &[(&str, &str)] = &[
     (
         "TRIM(CHAR(160)&\"a\")",
-        "CHAR(160) depends on the code page; LibreOffice yields U+FFFD",
+        "CHAR(160): LibreOffice on UTF-8 Linux yields U+FFFD; the engine uses Windows-1252",
     ),
     (
         "_xlfn.DAYS(\"2024-03-01\",\"2024-02-01\")",

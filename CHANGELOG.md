@@ -21,3 +21,5 @@ Complete rewrite around a format-independent IR and a calculation engine; the
 - Document settings applied: iteration (XLSX/ODS), ODS search mode (regex/wildcards/literal), whole-cell and case sensitivity, two-digit-year window; with no command-line override of anything the document defines.
 - Text dates parsed by locale (numeric order, month names, times); `DATEDIF` `MD`/`YD`; per-character case mapping (`UPPER("ß")`).
 - Inputs and outputs are plain range lists; JSON keys are canonical range text.
+
+- Spanish alphabet order (`ñ` between `n` and `o`), accent-aware text order, `CHAR`/`CODE` in Windows-1252, regular expressions with look-around and back-references (`fancy-regex`).
