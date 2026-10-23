@@ -4,7 +4,7 @@ Compile an XLSX or ODS spreadsheet into a standalone executable (or a library
 call) that takes JSON in and returns JSON out.
 
 ```text
-loan.xlsx ──┐                                ┌─ ./loan   (single file, ~0.9 MB, ~2 ms/run)
+loan.xlsx ──┐                                ┌─ ./loan   (single file, ~4 MB, ~2 ms/run)
             ├─▶ IR ──▶ fold · prune · order ─┼─ program.json  (the IR, portable)
 loan.ods  ──┘  (format independent)          └─ Program::execute() (library)
 ```

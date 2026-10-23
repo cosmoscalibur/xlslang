@@ -199,7 +199,7 @@ localized because files always store the canonical ones.
 
 ## Executable format
 
-`xlslang build` copies a runtime stub — `xlslang-rt` (0.9 MB, engine only) or
+`xlslang build` copies a runtime stub — `xlslang-rt` (~4 MB with the ICU collation data, engine only) or
 the full binary — and appends the program as JSON plus a 16-byte trailer
 (`XLSLANG1` + length). At start the binary looks for the trailer in its own
 file; if present it runs the program, otherwise it is the compiler. No
