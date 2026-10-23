@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Installs the channel and components from rust-toolchain.toml.
+      - run: rustup toolchain install
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test
+
+  engine-only:
+    name: build without the file loader
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --no-default-features --lib --bin xlslang-rt

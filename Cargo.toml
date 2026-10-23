@@ -1,7 +1,38 @@
 [package]
 name = "xlslang"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
+rust-version = "1.99"
+description = "Compiler from XLSX/ODS spreadsheets to standalone executables, with a format-independent IR and a hybrid compile/runtime calculation engine"
+license = "MIT"
+repository = "https://github.com/cosmoscalibur/xlslang"
+
+[lib]
+name = "xlslang"
+path = "src/lib.rs"
+
+[[bin]]
+name = "xlslang"
+path = "src/main.rs"
+required-features = ["load"]
+
+[features]
+default = ["load"]
+# Frontend that reads XLSX/ODS files through the sheetrs readers.
+load = ["dep:sheetrs"]
 
 [dependencies]
-pest = "2.8.0"
+serde = { version = "1.0.229", features = ["derive", "rc"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+sheetrs = { git = "https://github.com/cosmoscalibur/sheetrs", branch = "develop", default-features = false, optional = true }
+
+[dev-dependencies]
+tempfile = "3.27"
+# Cross-check of the in-house SCC/topological order (see docs/DESIGN.md).
+petgraph = "0.8.3"
+ultragraph = "0.9.9"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
